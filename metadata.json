@@ -1,0 +1,7 @@
+{
+  "name": "ROSYFIT - Backend",
+  "description": "A comprehensive fitness and diet management app with social meal sharing, goal tracking, and AI-powered recipe assistance.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
