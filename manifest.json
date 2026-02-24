@@ -1,0 +1,23 @@
+{
+  "name": "ROSYFIT",
+  "short_name": "RosyFit",
+  "description": "Il tuo diario fitness e alimentare",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#f43f5e",
+  "icons": [
+    {
+      "src": "https://picsum.photos/id/102/192/192",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://picsum.photos/id/102/512/512",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
