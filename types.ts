@@ -6,8 +6,29 @@ export enum View {
   GOALS = 'GOALS',
   MEALS = 'MEALS',
   SETTINGS = 'SETTINGS',
-  PROFILE = 'PROFILE'
+  PROFILE = 'PROFILE',
+  FRIEND_PROFILE = 'FRIEND_PROFILE'
 }
+
+export interface MealDetail {
+  fullTitle: string;
+  desc: string;
+  kcal: number;
+  carbs: number;
+  protein: number;
+  fats: number;
+  isFree?: boolean;
+}
+
+export interface DayPlan {
+  colazione: MealDetail;
+  spuntino: MealDetail;
+  pranzo: MealDetail;
+  spuntino2?: MealDetail;
+  cena: MealDetail;
+}
+
+export type WeeklyDiet = Record<string, DayPlan>;
 
 export interface UserProfile {
   name: string;
@@ -17,6 +38,7 @@ export interface UserProfile {
   weight: number;
   height: number;
   bmi: number;
+  diet?: WeeklyDiet;
 }
 
 export interface Friend {

@@ -62,7 +62,7 @@ const LoginView: React.FC = () => {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Il tuo nome"
-                className="w-full px-6 py-4 rounded-2xl bg-gray-50 border border-gray-100 focus:ring-2 focus:ring-rose-500 outline-none transition-all text-sm font-bold text-slate-900"
+                className="w-full px-6 py-4 rounded-2xl bg-gray-50 border border-gray-100 focus:ring-2 focus:ring-rose-500 outline-none transition-all text-sm font-bold"
                 required
               />
             </div>
@@ -74,7 +74,7 @@ const LoginView: React.FC = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="rosy@example.com"
-              className="w-full px-6 py-4 rounded-2xl bg-gray-50 border border-gray-100 focus:ring-2 focus:ring-rose-500 outline-none transition-all text-sm font-bold text-slate-900"
+              className="w-full px-6 py-4 rounded-2xl bg-gray-50 border border-gray-100 focus:ring-2 focus:ring-rose-500 outline-none transition-all text-sm font-bold"
               required
             />
           </div>
@@ -85,7 +85,7 @@ const LoginView: React.FC = () => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
-              className="w-full px-6 py-4 rounded-2xl bg-gray-50 border border-gray-100 focus:ring-2 focus:ring-rose-500 outline-none transition-all text-sm font-bold text-slate-900"
+              className="w-full px-6 py-4 rounded-2xl bg-gray-50 border border-gray-100 focus:ring-2 focus:ring-rose-500 outline-none transition-all text-sm font-bold"
               required
             />
           </div>

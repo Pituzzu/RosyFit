@@ -1,7 +1,9 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { UserProfile } from '../types';
 import { auth, db } from '../services/firebase';
+import { collection, query, orderBy, limit, onSnapshot, doc, getDoc, setDoc } from 'firebase/firestore';
 
 interface HomeViewProps {
   profile: UserProfile;
@@ -28,10 +30,10 @@ const HomeView: React.FC<HomeViewProps> = ({ profile }) => {
   // Sincronizzazione Acqua con Firestore
   useEffect(() => {
     if (!auth.currentUser) return;
-    const waterRef = db.collection('dailyStats').doc(`${auth.currentUser.uid}_${todayStr}`);
-    const unsub = waterRef.onSnapshot((snap) => {
-      if (snap.exists) {
-        setWaterGlasses(snap.data()?.water || 0);
+    const waterRef = doc(db, 'dailyStats', `${auth.currentUser.uid}_${todayStr}`);
+    const unsub = onSnapshot(waterRef, (snap) => {
+      if (snap.exists()) {
+        setWaterGlasses(snap.data().water || 0);
       }
     });
     return () => unsub();
@@ -39,13 +41,36 @@ const HomeView: React.FC<HomeViewProps> = ({ profile }) => {
 
   // Caricamento Post Reali
   useEffect(() => {
-    const q = db.collection('meals').orderBy('timestamp', 'desc').limit(5);
-    const unsub = q.onSnapshot((snap) => {
-      const posts = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const q = query(collection(db, 'meals'), orderBy('timestamp', 'desc'), limit(20));
+    const unsub = onSnapshot(q, (snap) => {
+      const posts = snap.docs.map(doc => {
+        const data = doc.data();
+        return { 
+          id: doc.id, 
+          ...data,
+          timestamp: data.timestamp?.toDate() || new Date()
+        };
+      });
       setFeedPosts(posts);
     });
     return () => unsub();
   }, []);
+
+  const groupedPosts = useMemo(() => {
+    const groups: Record<string, Record<string, any[]>> = {};
+
+    feedPosts.forEach(post => {
+      const dateKey = post.timestamp.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      const mealType = post.type || 'Altro';
+
+      if (!groups[dateKey]) groups[dateKey] = {};
+      if (!groups[dateKey][mealType]) groups[dateKey][mealType] = [];
+      
+      groups[dateKey][mealType].push(post);
+    });
+
+    return groups;
+  }, [feedPosts]);
 
   useEffect(() => {
     const checkSkippedTasks = () => {
@@ -80,8 +105,8 @@ const HomeView: React.FC<HomeViewProps> = ({ profile }) => {
     if (waterGlasses < totalWaterGoal && auth.currentUser) {
       const nextCount = waterGlasses + 1;
       setWaterGlasses(nextCount);
-      const waterRef = db.collection('dailyStats').doc(`${auth.currentUser.uid}_${todayStr}`);
-      await waterRef.set({ water: nextCount, date: todayStr }, { merge: true });
+      const waterRef = doc(db, 'dailyStats', `${auth.currentUser.uid}_${todayStr}`);
+      await setDoc(waterRef, { water: nextCount, date: todayStr }, { merge: true });
     }
   };
 
@@ -132,12 +157,40 @@ const HomeView: React.FC<HomeViewProps> = ({ profile }) => {
           <div className="flex-1">
             <div className="flex gap-1.5 mb-2">
               {[...Array(totalWaterGoal)].map((_, i) => (
-                <div key={i} className={`h-2 flex-1 rounded-full ${i < waterGlasses ? 'bg-white' : 'bg-blue-300/40'}`} />
+                <motion.div 
+                  key={i} 
+                  initial={false}
+                  animate={{ 
+                    backgroundColor: i < waterGlasses ? '#ffffff' : 'rgba(147, 197, 253, 0.4)',
+                    scale: i === waterGlasses - 1 ? [1, 1.2, 1] : 1
+                  }}
+                  transition={{ duration: 0.3 }}
+                  className="h-2 flex-1 rounded-full" 
+                />
               ))}
             </div>
-            <p className="text-sm font-medium">{waterGlasses * 250}ml registrati</p>
+            <div className="flex items-center gap-2">
+              <AnimatePresence mode="wait">
+                <motion.p 
+                  key={waterGlasses}
+                  initial={{ y: 10, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: -10, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="text-sm font-medium"
+                >
+                  {waterGlasses * 250}ml registrati
+                </motion.p>
+              </AnimatePresence>
+            </div>
           </div>
-          <button onClick={addGlass} className="bg-white text-blue-600 p-2 px-4 rounded-xl font-bold shadow-md active:scale-90 transition-transform">+250ml</button>
+          <motion.button 
+            whileTap={{ scale: 0.9 }}
+            onClick={addGlass} 
+            className="bg-white text-blue-600 p-2 px-4 rounded-xl font-bold shadow-md transition-transform"
+          >
+            +250ml
+          </motion.button>
         </div>
       </div>
 
@@ -165,26 +218,47 @@ const HomeView: React.FC<HomeViewProps> = ({ profile }) => {
         </div>
       </div>
 
-      <h2 className="text-xl font-bold">Foto Recenti</h2>
-      <div className="space-y-6">
-        {feedPosts.length === 0 ? (
+      <h2 className="text-xl font-bold">Diario Alimentare</h2>
+      <div className="space-y-10">
+        {Object.keys(groupedPosts).length === 0 ? (
           <div className="text-center py-10 border-2 border-dashed border-gray-100 dark:border-slate-800 rounded-3xl">
             <p className="text-gray-400 text-sm italic">Ancora nessun post. Inizia a fotografare i tuoi pasti!</p>
           </div>
         ) : (
-          feedPosts.map((post) => (
-            <div key={post.id} className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm overflow-hidden border border-gray-100 dark:border-slate-700 group">
-              <div className="p-4 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center font-bold text-rose-500">{post.userName?.[0]}</div>
-                <div className="flex-1">
-                  <span className="font-bold block text-sm">{post.userName}</span>
-                  <span className="text-[10px] text-gray-400 uppercase font-bold">{post.time}</span>
+          Object.entries(groupedPosts).map(([date, mealGroups]) => (
+            <div key={date} className="space-y-6">
+              <div className="sticky top-0 z-20 bg-gray-50/80 dark:bg-slate-900/80 backdrop-blur-sm py-2">
+                <h3 className="text-sm font-black uppercase tracking-[0.3em] text-rose-500 border-b border-rose-100 dark:border-rose-900/30 pb-1">
+                  {date}
+                </h3>
+              </div>
+              
+              {Object.entries(mealGroups).map(([mealType, posts]) => (
+                <div key={mealType} className="space-y-4">
+                  <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-2">
+                    {mealType}
+                  </h4>
+                  <div className="grid grid-cols-1 gap-4">
+                    {posts.map((post) => (
+                      <div key={post.id} className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm overflow-hidden border border-gray-100 dark:border-slate-700 group">
+                        <div className="p-4 flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-rose-100 flex items-center justify-center font-bold text-rose-500 text-xs">{post.userName?.[0]}</div>
+                          <div className="flex-1">
+                            <span className="font-bold block text-xs">{post.userName}</span>
+                            <span className="text-[9px] text-gray-400 uppercase font-bold">
+                              {post.timestamp.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                        </div>
+                        <img src={post.image} className="w-full h-48 object-cover" alt="Meal" />
+                        <div className="p-4">
+                          <p className="text-sm text-gray-800 dark:text-gray-200">{post.description}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-              <img src={post.image} className="w-full h-64 object-cover" alt="Meal" />
-              <div className="p-4">
-                <p className="text-sm text-gray-800 dark:text-gray-200">{post.description}</p>
-              </div>
+              ))}
             </div>
           ))
         )}

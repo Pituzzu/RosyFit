@@ -1,7 +1,6 @@
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { GymSettings } from '../types';
-import { requestNotificationPermission } from '../services/notifications';
 
 interface SettingsViewProps {
   darkMode: boolean;
@@ -11,14 +10,7 @@ interface SettingsViewProps {
 }
 
 const SettingsView: React.FC<SettingsViewProps> = ({ darkMode, setDarkMode, gymSettings, setGymSettings }) => {
-  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const days = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
-
-  useEffect(() => {
-    if ('Notification' in window) {
-      setNotificationsEnabled(Notification.permission === 'granted');
-    }
-  }, []);
 
   const toggleDay = (day: string) => {
     const newDays = gymSettings.days.includes(day)
@@ -27,40 +19,9 @@ const SettingsView: React.FC<SettingsViewProps> = ({ darkMode, setDarkMode, gymS
     setGymSettings({ ...gymSettings, days: newDays });
   };
 
-  const enableNotifications = async () => {
-    const granted = await requestNotificationPermission();
-    setNotificationsEnabled(granted);
-    if (granted) {
-      new Notification('ROSYFIT', { body: 'Notifiche attivate con successo! 💪' });
-    } else {
-      alert("Devi consentire le notifiche nelle impostazioni del browser.");
-    }
-  };
-
   return (
     <div className="p-4 space-y-8">
       <h1 className="text-2xl font-bold">Impostazioni</h1>
-
-      <section className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-slate-700 space-y-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <h3 className="font-bold">Notifiche Pasti</h3>
-            <p className="text-xs text-gray-500">Ricordami di mangiare</p>
-          </div>
-          <button 
-            onClick={enableNotifications}
-            disabled={notificationsEnabled}
-            className={`w-14 h-8 rounded-full transition-colors relative ${notificationsEnabled ? 'bg-green-500' : 'bg-gray-300'}`}
-          >
-            <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${notificationsEnabled ? 'right-1' : 'left-1'}`} />
-          </button>
-        </div>
-        {!notificationsEnabled && (
-          <p className="text-[10px] text-orange-500 font-bold bg-orange-50 p-2 rounded-lg">
-            ⚠️ Clicca per attivare i promemoria (Colazione, Pranzo, Cena...)
-          </p>
-        )}
-      </section>
 
       <section className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-slate-700 space-y-6">
         <div className="flex justify-between items-center">

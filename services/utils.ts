@@ -37,3 +37,7 @@ export const compressImage = (file: File, maxWidth = 800, quality = 0.6): Promis
     reader.onerror = (err) => reject(err);
   });
 };
+
+export const sanitizeForFirestore = (obj: any): any => {
+  return JSON.parse(JSON.stringify(obj));
+};

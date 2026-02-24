@@ -6,9 +6,10 @@ import { auth } from '../services/firebase';
 interface ProfileViewProps {
   profile: UserProfile;
   setProfile: (p: UserProfile) => void;
+  onViewFriend: (friendId: string) => void;
 }
 
-const ProfileView: React.FC<ProfileViewProps> = ({ profile, setProfile }) => {
+const ProfileView: React.FC<ProfileViewProps> = ({ profile, setProfile, onViewFriend }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState(profile);
 
@@ -67,7 +68,27 @@ const ProfileView: React.FC<ProfileViewProps> = ({ profile, setProfile }) => {
 
       <div className="bg-white dark:bg-slate-800 p-6 rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-slate-700">
         <h3 className="font-black text-xs uppercase tracking-widest text-gray-400 mb-4">Amici</h3>
-        <p className="text-sm text-gray-400 italic">Ancora nessun amico collegato. Funzionalità in arrivo!</p>
+        {profile.friends && profile.friends.length > 0 ? (
+          <div className="space-y-4">
+            {profile.friends.map(friend => (
+              <div 
+                key={friend.id} 
+                onClick={() => onViewFriend(friend.id)}
+                className="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-900 rounded-2xl cursor-pointer hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-rose-100 dark:bg-rose-900/40 flex items-center justify-center text-rose-500 font-black">
+                    {friend.name[0]}
+                  </div>
+                  <span className="font-bold text-sm">{friend.name}</span>
+                </div>
+                <span className="text-[10px] font-black uppercase text-rose-500 tracking-widest">Vedi Dieta →</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-gray-400 italic">Ancora nessun amico collegato.</p>
+        )}
       </div>
 
       <button onClick={handleLogout} className="w-full bg-slate-900 text-white dark:bg-white dark:text-slate-900 py-5 rounded-2xl font-black uppercase tracking-widest text-xs active:scale-95 transition-all shadow-xl">Disconnetti Sessione</button>

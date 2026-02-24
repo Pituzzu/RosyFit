@@ -1,8 +1,109 @@
 
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
+import { WeeklyDiet } from "../types";
 
 // Use process.env.API_KEY directly as per guidelines.
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+const dietSchema = {
+  type: Type.OBJECT,
+  properties: {
+    Lunedì: { $ref: "#/definitions/dayPlan" },
+    Martedì: { $ref: "#/definitions/dayPlan" },
+    Mercoledì: { $ref: "#/definitions/dayPlan" },
+    Giovedì: { $ref: "#/definitions/dayPlan" },
+    Venerdì: { $ref: "#/definitions/dayPlan" },
+    Sabato: { $ref: "#/definitions/dayPlan" },
+    Domenica: { $ref: "#/definitions/dayPlan" },
+  },
+  definitions: {
+    mealDetail: {
+      type: Type.OBJECT,
+      properties: {
+        fullTitle: { type: Type.STRING },
+        desc: { type: Type.STRING },
+        kcal: { type: Type.NUMBER },
+        carbs: { type: Type.NUMBER },
+        protein: { type: Type.NUMBER },
+        fats: { type: Type.NUMBER },
+        isFree: { type: Type.BOOLEAN },
+      },
+      required: ["fullTitle", "desc", "kcal", "carbs", "protein", "fats"],
+    },
+    dayPlan: {
+      type: Type.OBJECT,
+      properties: {
+        colazione: { $ref: "#/definitions/mealDetail" },
+        spuntino: { $ref: "#/definitions/mealDetail" },
+        pranzo: { $ref: "#/definitions/mealDetail" },
+        spuntino2: { $ref: "#/definitions/mealDetail" },
+        cena: { $ref: "#/definitions/mealDetail" },
+      },
+      required: ["colazione", "spuntino", "pranzo", "cena"],
+    },
+  },
+};
+
+// Note: Gemini responseSchema doesn't support $ref well in all versions, 
+// so I'll define it more explicitly if needed, but let's try a flatter version first for safety.
+const flatDietSchema = {
+  type: Type.OBJECT,
+  properties: {
+    Lunedì: {
+      type: Type.OBJECT,
+      properties: {
+        colazione: { type: Type.OBJECT, properties: { fullTitle: { type: Type.STRING }, desc: { type: Type.STRING }, kcal: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, fats: { type: Type.NUMBER } }, required: ["fullTitle", "desc", "kcal", "carbs", "protein", "fats"] },
+        spuntino: { type: Type.OBJECT, properties: { fullTitle: { type: Type.STRING }, desc: { type: Type.STRING }, kcal: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, fats: { type: Type.NUMBER } }, required: ["fullTitle", "desc", "kcal", "carbs", "protein", "fats"] },
+        pranzo: { type: Type.OBJECT, properties: { fullTitle: { type: Type.STRING }, desc: { type: Type.STRING }, kcal: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, fats: { type: Type.NUMBER } }, required: ["fullTitle", "desc", "kcal", "carbs", "protein", "fats"] },
+        spuntino2: { type: Type.OBJECT, properties: { fullTitle: { type: Type.STRING }, desc: { type: Type.STRING }, kcal: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, fats: { type: Type.NUMBER } }, required: ["fullTitle", "desc", "kcal", "carbs", "protein", "fats"] },
+        cena: { type: Type.OBJECT, properties: { fullTitle: { type: Type.STRING }, desc: { type: Type.STRING }, kcal: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, fats: { type: Type.NUMBER } }, required: ["fullTitle", "desc", "kcal", "carbs", "protein", "fats"] },
+      },
+      required: ["colazione", "spuntino", "pranzo", "cena"]
+    },
+    Martedì: { type: Type.OBJECT, properties: { colazione: { type: Type.OBJECT, properties: { fullTitle: { type: Type.STRING }, desc: { type: Type.STRING }, kcal: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, fats: { type: Type.NUMBER } }, required: ["fullTitle", "desc", "kcal", "carbs", "protein", "fats"] }, spuntino: { type: Type.OBJECT, properties: { fullTitle: { type: Type.STRING }, desc: { type: Type.STRING }, kcal: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, fats: { type: Type.NUMBER } }, required: ["fullTitle", "desc", "kcal", "carbs", "protein", "fats"] }, pranzo: { type: Type.OBJECT, properties: { fullTitle: { type: Type.STRING }, desc: { type: Type.STRING }, kcal: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, fats: { type: Type.NUMBER } }, required: ["fullTitle", "desc", "kcal", "carbs", "protein", "fats"] }, spuntino2: { type: Type.OBJECT, properties: { fullTitle: { type: Type.STRING }, desc: { type: Type.STRING }, kcal: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, fats: { type: Type.NUMBER } }, required: ["fullTitle", "desc", "kcal", "carbs", "protein", "fats"] }, cena: { type: Type.OBJECT, properties: { fullTitle: { type: Type.STRING }, desc: { type: Type.STRING }, kcal: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, fats: { type: Type.NUMBER } }, required: ["fullTitle", "desc", "kcal", "carbs", "protein", "fats"] } }, required: ["colazione", "spuntino", "pranzo", "cena"] },
+    Mercoledì: { type: Type.OBJECT, properties: { colazione: { type: Type.OBJECT, properties: { fullTitle: { type: Type.STRING }, desc: { type: Type.STRING }, kcal: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, fats: { type: Type.NUMBER } }, required: ["fullTitle", "desc", "kcal", "carbs", "protein", "fats"] }, spuntino: { type: Type.OBJECT, properties: { fullTitle: { type: Type.STRING }, desc: { type: Type.STRING }, kcal: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, fats: { type: Type.NUMBER } }, required: ["fullTitle", "desc", "kcal", "carbs", "protein", "fats"] }, pranzo: { type: Type.OBJECT, properties: { fullTitle: { type: Type.STRING }, desc: { type: Type.STRING }, kcal: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, fats: { type: Type.NUMBER } }, required: ["fullTitle", "desc", "kcal", "carbs", "protein", "fats"] }, spuntino2: { type: Type.OBJECT, properties: { fullTitle: { type: Type.STRING }, desc: { type: Type.STRING }, kcal: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, fats: { type: Type.NUMBER } }, required: ["fullTitle", "desc", "kcal", "carbs", "protein", "fats"] }, cena: { type: Type.OBJECT, properties: { fullTitle: { type: Type.STRING }, desc: { type: Type.STRING }, kcal: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, fats: { type: Type.NUMBER } }, required: ["fullTitle", "desc", "kcal", "carbs", "protein", "fats"] } }, required: ["colazione", "spuntino", "pranzo", "cena"] },
+    Giovedì: { type: Type.OBJECT, properties: { colazione: { type: Type.OBJECT, properties: { fullTitle: { type: Type.STRING }, desc: { type: Type.STRING }, kcal: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, fats: { type: Type.NUMBER } }, required: ["fullTitle", "desc", "kcal", "carbs", "protein", "fats"] }, spuntino: { type: Type.OBJECT, properties: { fullTitle: { type: Type.STRING }, desc: { type: Type.STRING }, kcal: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, fats: { type: Type.NUMBER } }, required: ["fullTitle", "desc", "kcal", "carbs", "protein", "fats"] }, pranzo: { type: Type.OBJECT, properties: { fullTitle: { type: Type.STRING }, desc: { type: Type.STRING }, kcal: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, fats: { type: Type.NUMBER } }, required: ["fullTitle", "desc", "kcal", "carbs", "protein", "fats"] }, spuntino2: { type: Type.OBJECT, properties: { fullTitle: { type: Type.STRING }, desc: { type: Type.STRING }, kcal: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, fats: { type: Type.NUMBER } }, required: ["fullTitle", "desc", "kcal", "carbs", "protein", "fats"] }, cena: { type: Type.OBJECT, properties: { fullTitle: { type: Type.STRING }, desc: { type: Type.STRING }, kcal: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, fats: { type: Type.NUMBER } }, required: ["fullTitle", "desc", "kcal", "carbs", "protein", "fats"] } }, required: ["colazione", "spuntino", "pranzo", "cena"] },
+    Venerdì: { type: Type.OBJECT, properties: { colazione: { type: Type.OBJECT, properties: { fullTitle: { type: Type.STRING }, desc: { type: Type.STRING }, kcal: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, fats: { type: Type.NUMBER } }, required: ["fullTitle", "desc", "kcal", "carbs", "protein", "fats"] }, spuntino: { type: Type.OBJECT, properties: { fullTitle: { type: Type.STRING }, desc: { type: Type.STRING }, kcal: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, fats: { type: Type.NUMBER } }, required: ["fullTitle", "desc", "kcal", "carbs", "protein", "fats"] }, pranzo: { type: Type.OBJECT, properties: { fullTitle: { type: Type.STRING }, desc: { type: Type.STRING }, kcal: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, fats: { type: Type.NUMBER } }, required: ["fullTitle", "desc", "kcal", "carbs", "protein", "fats"] }, spuntino2: { type: Type.OBJECT, properties: { fullTitle: { type: Type.STRING }, desc: { type: Type.STRING }, kcal: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, fats: { type: Type.NUMBER } }, required: ["fullTitle", "desc", "kcal", "carbs", "protein", "fats"] }, cena: { type: Type.OBJECT, properties: { fullTitle: { type: Type.STRING }, desc: { type: Type.STRING }, kcal: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, fats: { type: Type.NUMBER } }, required: ["fullTitle", "desc", "kcal", "carbs", "protein", "fats"] } }, required: ["colazione", "spuntino", "pranzo", "cena"] },
+    Sabato: { type: Type.OBJECT, properties: { colazione: { type: Type.OBJECT, properties: { fullTitle: { type: Type.STRING }, desc: { type: Type.STRING }, kcal: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, fats: { type: Type.NUMBER } }, required: ["fullTitle", "desc", "kcal", "carbs", "protein", "fats"] }, spuntino: { type: Type.OBJECT, properties: { fullTitle: { type: Type.STRING }, desc: { type: Type.STRING }, kcal: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, fats: { type: Type.NUMBER } }, required: ["fullTitle", "desc", "kcal", "carbs", "protein", "fats"] }, pranzo: { type: Type.OBJECT, properties: { fullTitle: { type: Type.STRING }, desc: { type: Type.STRING }, kcal: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, fats: { type: Type.NUMBER } }, required: ["fullTitle", "desc", "kcal", "carbs", "protein", "fats"] }, spuntino2: { type: Type.OBJECT, properties: { fullTitle: { type: Type.STRING }, desc: { type: Type.STRING }, kcal: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, fats: { type: Type.NUMBER } }, required: ["fullTitle", "desc", "kcal", "carbs", "protein", "fats"] }, cena: { type: Type.OBJECT, properties: { fullTitle: { type: Type.STRING }, desc: { type: Type.STRING }, kcal: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, fats: { type: Type.NUMBER } }, required: ["fullTitle", "desc", "kcal", "carbs", "protein", "fats"] } }, required: ["colazione", "spuntino", "pranzo", "cena"] },
+    Domenica: { type: Type.OBJECT, properties: { colazione: { type: Type.OBJECT, properties: { fullTitle: { type: Type.STRING }, desc: { type: Type.STRING }, kcal: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, fats: { type: Type.NUMBER } }, required: ["fullTitle", "desc", "kcal", "carbs", "protein", "fats"] }, spuntino: { type: Type.OBJECT, properties: { fullTitle: { type: Type.STRING }, desc: { type: Type.STRING }, kcal: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, fats: { type: Type.NUMBER } }, required: ["fullTitle", "desc", "kcal", "carbs", "protein", "fats"] }, pranzo: { type: Type.OBJECT, properties: { fullTitle: { type: Type.STRING }, desc: { type: Type.STRING }, kcal: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, fats: { type: Type.NUMBER } }, required: ["fullTitle", "desc", "kcal", "carbs", "protein", "fats"] }, spuntino2: { type: Type.OBJECT, properties: { fullTitle: { type: Type.STRING }, desc: { type: Type.STRING }, kcal: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, fats: { type: Type.NUMBER } }, required: ["fullTitle", "desc", "kcal", "carbs", "protein", "fats"] }, cena: { type: Type.OBJECT, properties: { fullTitle: { type: Type.STRING }, desc: { type: Type.STRING }, kcal: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, fats: { type: Type.NUMBER } }, required: ["fullTitle", "desc", "kcal", "carbs", "protein", "fats"] } }, required: ["colazione", "spuntino", "pranzo", "cena"] },
+  }
+};
+
+export const parseDietPDF = async (base64Pdf: string): Promise<WeeklyDiet | null> => {
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: {
+        parts: [
+          {
+            inlineData: {
+              mimeType: "application/pdf",
+              data: base64Pdf,
+            },
+          },
+          {
+            text: `Analizza questa dieta PDF e convertila in un oggetto JSON strutturato per ogni giorno della settimana (Lunedì, Martedì, Mercoledì, Giovedì, Venerdì, Sabato, Domenica).
+            Per ogni giorno, estrai: colazione, spuntino, pranzo, spuntino2 (se presente), cena.
+            Per ogni pasto, estrai: fullTitle (es. "COLAZIONE (Pancake)"), desc (gli ingredienti), kcal, carbs, protein, fats.
+            Se mancano i valori nutrizionali, stimali tu in base agli ingredienti.`,
+          },
+        ]
+      },
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: flatDietSchema as any,
+      }
+    });
+
+    if (response.text) {
+      return JSON.parse(response.text) as WeeklyDiet;
+    }
+    return null;
+  } catch (error) {
+    console.error("Diet PDF Parsing Error:", error);
+    return null;
+  }
+};
 
 /**
  * Helper per eseguire chiamate asincrone con retry in caso di errore transienti (500/503)

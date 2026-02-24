@@ -3,7 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { View, UserProfile, GymSettings } from './types';
 import { auth, db } from './services/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { checkAndSendNotifications } from './services/notifications';
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
+import { sanitizeForFirestore } from './services/utils';
 import LoginView from './views/Login';
 import HomeView from './views/Home';
 import DietView from './views/Diet';
@@ -21,6 +22,7 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<View>(View.HOME);
   const [darkMode, setDarkMode] = useState(false);
   const [showCheckIn, setShowCheckIn] = useState(false);
+  const [selectedFriendProfile, setSelectedFriendProfile] = useState<UserProfile | null>(null);
   
   const [profile, setProfile] = useState<UserProfile>({
     name: 'Atleta',
@@ -38,33 +40,16 @@ const App: React.FC = () => {
     timeOfDay: 'morning'
   });
 
-  // Gestione Notifiche
-  useEffect(() => {
-    // Controlla subito all'avvio
-    if (isAuthenticated) {
-      checkAndSendNotifications();
-    }
-
-    // Imposta un intervallo per controllare ogni minuto
-    const intervalId = setInterval(() => {
-      if (isAuthenticated) {
-        checkAndSendNotifications();
-      }
-    }, 60000); // 60000ms = 1 minuto
-
-    return () => clearInterval(intervalId);
-  }, [isAuthenticated]);
-
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setIsAuthenticated(true);
         
         // Sincronizzazione Profilo da Firestore
-        const userDocRef = db.collection('users').doc(user.uid);
-        const docSnap = await userDocRef.get();
+        const userDocRef = doc(db, 'users', user.uid);
+        const docSnap = await getDoc(userDocRef);
         
-        if (docSnap.exists) {
+        if (docSnap.exists()) {
           setProfile(docSnap.data() as UserProfile);
         } else {
           // Crea profilo iniziale se nuovo utente
@@ -77,14 +62,14 @@ const App: React.FC = () => {
             height: 0,
             bmi: 0,
           };
-          await userDocRef.set(initialProfile);
+          await setDoc(userDocRef, initialProfile);
           setProfile(initialProfile);
         }
 
         // Sincronizzazione Impostazioni
-        const settingsRef = db.collection('settings').doc(user.uid);
-        settingsRef.onSnapshot((snap) => {
-          if (snap.exists) {
+        const settingsRef = doc(db, 'settings', user.uid);
+        onSnapshot(settingsRef, (snap) => {
+          if (snap.exists()) {
             setGymSettings(snap.data() as GymSettings);
           }
         });
@@ -136,7 +121,18 @@ const App: React.FC = () => {
 
       <main className="flex-1 pb-20 overflow-y-auto">
         {activeTab === View.HOME && <HomeView profile={profile} />}
-        {activeTab === View.DIET && <DietView gymSettings={gymSettings} />}
+        {activeTab === View.DIET && (
+          <DietView 
+            gymSettings={gymSettings} 
+            profile={profile}
+            setProfile={async (p) => {
+              setProfile(p);
+              if (auth.currentUser) {
+                await setDoc(doc(db, 'users', auth.currentUser.uid), sanitizeForFirestore(p));
+              }
+            }}
+          />
+        )}
         {activeTab === View.SHOPPING && <ShoppingListView />}
         {activeTab === View.GOALS && <GoalsView profile={profile} />}
         {activeTab === View.MEALS && <MealsView gymSettings={gymSettings} />}
@@ -148,7 +144,7 @@ const App: React.FC = () => {
             setGymSettings={async (val) => {
               setGymSettings(val);
               if (auth.currentUser) {
-                await db.collection('settings').doc(auth.currentUser.uid).set(val);
+                await setDoc(doc(db, 'settings', auth.currentUser.uid), sanitizeForFirestore(val));
               }
             }}
           />
@@ -159,9 +155,24 @@ const App: React.FC = () => {
             setProfile={async (p) => {
               setProfile(p);
               if (auth.currentUser) {
-                await db.collection('users').doc(auth.currentUser.uid).set(p);
+                await setDoc(doc(db, 'users', auth.currentUser.uid), sanitizeForFirestore(p));
               }
             }}
+            onViewFriend={async (friendId) => {
+              const friendDoc = await getDoc(doc(db, 'users', friendId));
+              if (friendDoc.exists()) {
+                setSelectedFriendProfile(friendDoc.data() as UserProfile);
+                setActiveTab(View.FRIEND_PROFILE);
+              }
+            }}
+          />
+        )}
+        {activeTab === View.FRIEND_PROFILE && selectedFriendProfile && (
+          <DietView 
+            gymSettings={gymSettings}
+            profile={selectedFriendProfile}
+            readOnly={true}
+            onBack={() => setActiveTab(View.PROFILE)}
           />
         )}
       </main>
