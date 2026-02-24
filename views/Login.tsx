@@ -38,8 +38,8 @@ const LoginView: React.FC = () => {
     <div className="min-h-screen bg-rose-50 flex flex-col items-center justify-center p-6 font-sans">
       <div className="w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl p-10 border border-rose-100">
         <div className="text-center mb-10">
-          <div className="w-20 h-20 bg-rose-500 rounded-3xl mx-auto flex items-center justify-center shadow-lg shadow-rose-200 mb-6 rotate-3">
-             <span className="text-white text-4xl font-black">R</span>
+          <div className="w-20 h-20 bg-emerald-500 rounded-3xl mx-auto flex items-center justify-center shadow-lg shadow-emerald-200 mb-6 rotate-3">
+             <span className="text-white text-4xl font-black">🥑</span>
           </div>
           <h1 className="text-4xl font-black text-slate-800 tracking-tighter mb-2">ROSYFIT</h1>
           <p className="text-gray-400 text-sm font-medium uppercase tracking-widest">

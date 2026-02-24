@@ -135,7 +135,7 @@ const App: React.FC = () => {
         )}
         {activeTab === View.SHOPPING && <ShoppingListView />}
         {activeTab === View.GOALS && <GoalsView profile={profile} />}
-        {activeTab === View.MEALS && <MealsView gymSettings={gymSettings} />}
+        {activeTab === View.MEALS && <MealsView gymSettings={gymSettings} profile={profile} />}
         {activeTab === View.SETTINGS && (
           <SettingsView 
             darkMode={darkMode} 

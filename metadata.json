@@ -1,6 +1,6 @@
 {
-  "name": "ROSYFIT - Backend",
-  "description": "A comprehensive fitness and diet management app with social meal sharing, goal tracking, and AI-powered recipe assistance.",
+  "name": "ROSYFIT - Healthy Living",
+  "description": "Your personal AI-powered diet and fitness companion. Track meals, manage shopping lists, and achieve your health goals with avocado-fresh precision.",
   "requestFramePermissions": [
     "camera"
   ]

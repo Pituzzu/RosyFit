@@ -34,6 +34,9 @@ export interface UserProfile {
   name: string;
   surname: string;
   birthDate: string;
+  dietStartDate?: string;
+  streak?: number;
+  avatar?: string;
   friends: Friend[];
   weight: number;
   height: number;
@@ -57,6 +60,28 @@ export interface MealPost {
   description: string;
   timestamp: Date;
   isGymDay: boolean;
+  likes?: string[]; // Array of user IDs
+}
+
+export interface Notification {
+  id: string;
+  userId: string; // Recipient
+  fromUserId: string;
+  fromUserName: string;
+  type: 'like' | 'comment' | 'system';
+  message: string;
+  read: boolean;
+  timestamp: Date;
+  link?: string;
+}
+
+export interface News {
+  id: string;
+  title: string;
+  content: string;
+  type: 'info' | 'warning' | 'success';
+  active: boolean;
+  timestamp: Date;
 }
 
 export interface GymSettings {

@@ -1,7 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { GymSettings } from '../types';
-import { analyzeMealNutrition } from '../services/geminiService';
+import { GymSettings, UserProfile } from '../types';
 import { auth, db } from '../services/firebase';
 import { collection, addDoc, query, orderBy, onSnapshot, Timestamp } from 'firebase/firestore';
 import { compressImage } from '../services/utils';
@@ -10,11 +9,13 @@ interface Meal {
   id: string;
   userId: string;
   userName: string;
+  userAvatar?: string;
   type: string;
   image: string;
   time: string;
   description: string;
   timestamp: Date;
+  likes?: string[];
   nutrition?: {
     calories: number;
     carbs: number;
@@ -26,9 +27,10 @@ interface Meal {
 
 interface MealsViewProps {
   gymSettings: GymSettings;
+  profile: UserProfile;
 }
 
-const MealsView: React.FC<MealsViewProps> = ({ gymSettings }) => {
+const MealsView: React.FC<MealsViewProps> = ({ gymSettings, profile }) => {
   const [viewMode, setViewMode] = useState<'personal' | 'friends'>('personal');
   const [meals, setMeals] = useState<Meal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -49,11 +51,13 @@ const MealsView: React.FC<MealsViewProps> = ({ gymSettings }) => {
           id: doc.id,
           userId: data.userId,
           userName: data.userName,
+          userAvatar: data.userAvatar,
           type: data.type,
           image: data.image,
           time: data.time,
           description: data.description,
           nutrition: data.nutrition,
+          likes: data.likes || [],
           timestamp: data.timestamp?.toDate() || new Date()
         };
       }) as Meal[];
@@ -108,6 +112,7 @@ const MealsView: React.FC<MealsViewProps> = ({ gymSettings }) => {
       await addDoc(collection(db, 'meals'), {
         userId: auth.currentUser.uid,
         userName: auth.currentUser.displayName || 'Atleta',
+        userAvatar: profile.avatar || '',
         type: category,
         image: compressedBase64,
         time: new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
@@ -123,6 +128,40 @@ const MealsView: React.FC<MealsViewProps> = ({ gymSettings }) => {
     }
   };
 
+  const handleLike = async (meal: Meal) => {
+    if (!auth.currentUser || meal.userId === auth.currentUser.uid) return;
+
+    const { updateDoc, doc: firestoreDoc, arrayUnion, arrayRemove, addDoc, collection, Timestamp } = await import('firebase/firestore');
+    const postRef = firestoreDoc(db, 'meals', meal.id);
+    const isLiked = meal.likes?.includes(auth.currentUser.uid);
+
+    try {
+      if (isLiked) {
+        await updateDoc(postRef, {
+          likes: arrayRemove(auth.currentUser.uid)
+        });
+      } else {
+        await updateDoc(postRef, {
+          likes: arrayUnion(auth.currentUser.uid)
+        });
+
+        // Crea notifica
+        await addDoc(collection(db, 'notifications'), {
+          userId: meal.userId,
+          fromUserId: auth.currentUser.uid,
+          fromUserName: profile.name,
+          type: 'like',
+          message: `${profile.name} ha messo mi piace al tuo pasto!`,
+          read: false,
+          timestamp: Timestamp.now(),
+          link: meal.id
+        });
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const deleteMeal = async (mealId: string) => {
     if (!window.confirm("Sei sicuro di voler eliminare questo pasto?")) return;
     try {
@@ -131,28 +170,6 @@ const MealsView: React.FC<MealsViewProps> = ({ gymSettings }) => {
     } catch (error) {
       console.error("Errore durante l'eliminazione:", error);
       alert("Errore durante l'eliminazione del pasto.");
-    }
-  };
-
-  const analyzeMeal = async (mealId: string) => {
-    const meal = meals.find(m => m.id === mealId);
-    if (!meal) return;
-
-    try {
-      // Passiamo il base64 rimosso del prefisso data:image/jpeg;base64,
-      const base64Data = meal.image.split(',')[1];
-      const resultString = await analyzeMealNutrition(base64Data, meal.description);
-      const regex = /CAL:\s*(\d+)\s*\|\s*CARBI:\s*(\d+)\s*\|\s*PRO:\s*(\d+)\s*\|\s*FATS:\s*(\d+)/i;
-      const match = resultString.match(regex);
-
-      if (match) {
-        alert(`Analisi AI: ${match[1]} kcal, ${match[2]}g carbi, ${match[3]}g pro, ${match[4]}g grassi`);
-      } else {
-        alert("L'AI non è riuscita a estrarre i dati. Riprova con una descrizione più chiara.");
-      }
-    } catch (error) {
-      console.error(error);
-      alert("Errore nell'analisi del pasto.");
     }
   };
 
@@ -232,7 +249,14 @@ const MealsView: React.FC<MealsViewProps> = ({ gymSettings }) => {
       <div className="space-y-8">
         {filteredMeals.map((meal) => (
           <div key={meal.id} className="relative bg-white dark:bg-slate-800 rounded-[3rem] overflow-hidden shadow-sm border border-gray-100 dark:border-slate-700">
-             <div className="absolute top-4 left-4 z-10 bg-black/40 backdrop-blur-md text-white text-[8px] font-black px-4 py-2 rounded-full uppercase tracking-widest">
+             <div className="absolute top-4 left-4 z-10 bg-black/40 backdrop-blur-md text-white text-[8px] font-black px-4 py-2 rounded-full uppercase tracking-widest flex items-center gap-2">
+               <div className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center overflow-hidden border border-white/20">
+                 {meal.userAvatar ? (
+                   <img src={meal.userAvatar} alt={meal.userName} className="w-full h-full object-cover" />
+                 ) : (
+                   <span className="text-[6px]">{meal.userName?.[0]}</span>
+                 )}
+               </div>
                {meal.userName} • {meal.time} • {meal.type}
              </div>
              <img src={meal.image} className="w-full h-96 object-cover" alt="Meal" />
@@ -240,10 +264,16 @@ const MealsView: React.FC<MealsViewProps> = ({ gymSettings }) => {
                 <p className="font-bold text-lg mb-4">{meal.description}</p>
                 <div className="flex gap-2">
                   <button 
-                    onClick={() => analyzeMeal(meal.id)}
-                    className="flex-1 bg-rose-50 dark:bg-rose-900/20 text-rose-500 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest"
+                    onClick={() => handleLike(meal)}
+                    disabled={meal.userId === auth.currentUser?.uid}
+                    className={`flex items-center justify-center gap-2 px-6 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all ${
+                      meal.likes?.includes(auth.currentUser?.uid) 
+                        ? 'bg-rose-500 text-white shadow-lg shadow-rose-200' 
+                        : 'bg-gray-50 dark:bg-slate-700 text-gray-400'
+                    } ${meal.userId === auth.currentUser?.uid ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'}`}
                   >
-                    Analizza AI 🪄
+                    <span>{meal.likes?.includes(auth.currentUser?.uid) ? '❤️' : '🤍'}</span>
+                    <span>{meal.likes?.length || 0}</span>
                   </button>
                   {meal.userId === auth.currentUser?.uid && (
                     <button 
