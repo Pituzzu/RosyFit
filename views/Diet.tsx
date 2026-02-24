@@ -301,9 +301,49 @@ const DietView: React.FC<DietViewProps> = ({ gymSettings, profile, setProfile, r
           </button>
         </div>
 
-        <p className="text-[11px] font-medium text-slate-500 dark:text-gray-400 leading-relaxed mb-4 pl-1">
-          {meal.desc}
-        </p>
+        <div className="text-[11px] font-medium text-slate-500 dark:text-gray-400 leading-relaxed mb-4 pl-1 flex flex-wrap gap-x-1 gap-y-1 items-center">
+          {(meal.desc || '').split('+').map((part, idx, arr) => {
+            const trimmedPart = part.trim();
+            const isLast = idx === arr.length - 1;
+            
+            if (trimmedPart.includes('/')) {
+              const rawOptions = trimmedPart.split('/').map(o => o.trim());
+              // Cerca un prefisso di quantità (es. "30g ", "100ml ", "1 ", "1.5 ")
+              const quantityMatch = rawOptions[0].match(/^(\d+(?:[.,]\d+)?\s*[a-zA-Z%]*\s*)/);
+              const prefix = quantityMatch ? quantityMatch[0] : '';
+
+              const options = rawOptions.map((opt, i) => {
+                if (i === 0) return opt;
+                // Se l'opzione successiva inizia con un numero, assumiamo abbia la sua quantità
+                if (/^\d/.test(opt)) return opt;
+                // Altrimenti preponiamo il prefisso della prima opzione
+                return prefix + opt;
+              });
+
+              return (
+                <React.Fragment key={idx}>
+                  <select 
+                    className="bg-rose-50 dark:bg-slate-900 border border-rose-100 dark:border-rose-900 text-rose-600 dark:text-rose-400 font-bold rounded-lg py-0.5 px-2 text-[10px] outline-none cursor-pointer hover:bg-rose-100 transition-colors"
+                    defaultValue={options[0]}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {options.map((opt, i) => (
+                      <option key={i} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                  {!isLast && <span>+</span>}
+                </React.Fragment>
+              );
+            }
+            
+            return (
+              <React.Fragment key={idx}>
+                <span>{trimmedPart}</span>
+                {!isLast && <span>+</span>}
+              </React.Fragment>
+            );
+          })}
+        </div>
 
         <div className="flex items-center justify-between pt-4 border-t border-gray-50 dark:border-slate-700">
            <div className="flex gap-4">
