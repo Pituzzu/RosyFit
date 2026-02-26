@@ -30,18 +30,32 @@ export interface DayPlan {
 
 export type WeeklyDiet = Record<string, DayPlan>;
 
+export interface WeeklyTarget {
+  id: string;
+  name: string;
+  min: number;
+  max: number;
+  current: number;
+  unit?: string;
+}
+
 export interface UserProfile {
   name: string;
   surname: string;
   birthDate: string;
   dietStartDate?: string;
   streak?: number;
+  lastStreakDate?: string;
   avatar?: string;
   friends: Friend[];
   weight: number;
   height: number;
   bmi: number;
   diet?: WeeklyDiet;
+  weeklyDiets?: Record<string, WeeklyDiet>;
+  selectedWeekId?: string;
+  weeklyTargets?: WeeklyTarget[];
+  lastTargetUpdateWeek?: string; // To handle weekly resets
 }
 
 export interface Friend {

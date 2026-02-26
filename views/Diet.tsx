@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { getRecipeAdvice, parseDietPDF } from '../services/geminiService';
 import { GymSettings, UserProfile, WeeklyDiet } from '../types';
 import { auth, db } from '../services/firebase';
-import { doc, setDoc, onSnapshot } from 'firebase/firestore';
+import { doc, setDoc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { sanitizeForFirestore } from '../services/utils';
 
 interface DietViewProps {
@@ -31,8 +31,9 @@ const DietView: React.FC<DietViewProps> = ({ gymSettings, profile, setProfile, r
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const daysOfWeek = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
+  const [activeWeek, setActiveWeek] = useState<string>(profile.selectedWeekId || 'week6'); // Default to week6 (Saturday cheat)
 
-  const defaultDiet: WeeklyDiet = useMemo(() => ({
+  const defaultDietTemplate: WeeklyDiet = useMemo(() => ({
     'Lunedì': {
       colazione: { fullTitle: "COLAZIONE (Pancake)", desc: "60g Albume + 30g Farina d'avena + 50g Yogurt Greco + 10g Ciocc. Fond. 80%", kcal: 345, carbs: 32, protein: 24, fats: 12 },
       spuntino: { fullTitle: "SPUNTINO", desc: "40g Parmigiano + 5g Miele + 2-3 Noci", kcal: 280, carbs: 8, protein: 15, fats: 20 },
@@ -73,7 +74,7 @@ const DietView: React.FC<DietViewProps> = ({ gymSettings, profile, setProfile, r
       spuntino: { fullTitle: "SPUNTINO", desc: "Frutta a piacere + 10g Frutta secca", kcal: 180, carbs: 25, protein: 3, fats: 8 },
       pranzo: { fullTitle: "PRANZO", desc: "150g Legumi + 70g Pane + Verdure + 10g Olio", kcal: 440, carbs: 60, protein: 18, fats: 14 },
       spuntino2: { fullTitle: "SPUNTINO 2", desc: "1 Barretta proteica", kcal: 200, carbs: 15, protein: 20, fats: 7 },
-      cena: { fullTitle: "PASTO LIBERO", desc: "Goditi la serata! Scegli quello che preferisci con moderazione.", kcal: 800, carbs: 80, protein: 30, fats: 40, isFree: true }
+      cena: { fullTitle: "CENA", desc: "170g Carne Rossa + 70g Pane + Verdure + 5g Olio", kcal: 480, carbs: 40, protein: 42, fats: 18 }
     },
     'Domenica': {
       colazione: { fullTitle: "COLAZIONE", desc: "50g Pane tostato + 30g Fesa di Tacchino/Pollo + 1 cucchiaio Olio EVO", kcal: 290, carbs: 30, protein: 12, fats: 14 },
@@ -84,30 +85,59 @@ const DietView: React.FC<DietViewProps> = ({ gymSettings, profile, setProfile, r
     }
   }), []);
 
-  const weeklyDiet = useMemo(() => {
-    const source = customDiet || profile.diet || defaultDiet;
-    // Clone per evitare mutazioni dirette e garantire la struttura completa
-    const merged = JSON.parse(JSON.stringify(source));
+  // Initialize weeklyDiets if not present
+  useEffect(() => {
+    if (!profile || readOnly || profile.weeklyDiets) return;
+
+    const cheatMeal = { fullTitle: "PASTO LIBERO", desc: "Goditi la serata! Scegli quello che preferisci con moderazione.", kcal: 800, carbs: 80, protein: 30, fats: 40, isFree: true };
     
-    daysOfWeek.forEach(day => {
-      if (!merged[day]) {
-        merged[day] = JSON.parse(JSON.stringify(defaultDiet[day]));
-      } else {
-        // Assicura che tutti i pasti esistano (incluso spuntino2)
-        ['colazione', 'spuntino', 'pranzo', 'spuntino2', 'cena'].forEach(mealKey => {
-          if (!merged[day][mealKey]) {
-             const defaultMeal = defaultDiet[day]?.[mealKey];
-             merged[day][mealKey] = defaultMeal ? { ...defaultMeal } : {
-               fullTitle: mealKey === 'spuntino2' ? 'SPUNTINO 2' : mealKey.toUpperCase(),
-               desc: '',
-               kcal: 0, carbs: 0, protein: 0, fats: 0
-             };
-          }
-        });
+    const newWeeklyDiets: Record<string, WeeklyDiet> = {};
+    
+    // Generate 7 weeks
+    daysOfWeek.forEach((cheatDay, index) => {
+      const weekKey = `week${index + 1}`;
+      const weekDiet = JSON.parse(JSON.stringify(defaultDietTemplate));
+      
+      // Set cheat meal for the specific day
+      if (weekDiet[cheatDay]) {
+        weekDiet[cheatDay].cena = { ...cheatMeal };
       }
+      
+      newWeeklyDiets[weekKey] = weekDiet;
     });
-    return merged;
-  }, [customDiet, profile.diet, defaultDiet]);
+
+    // Use existing diet for the matching week if possible, or just overwrite
+    // If profile.diet exists (legacy), try to preserve it in the corresponding week
+    // But for simplicity and to ensure the new structure is correct, we'll just initialize the new structure.
+    // If the user had a custom diet, it might be lost if we don't map it.
+    // Let's map the current profile.diet to 'week6' (Saturday cheat) if it exists, or just keep it as is.
+    
+    if (profile.diet) {
+       // If legacy diet exists, put it in week6 (default) or try to detect cheat day?
+       // Let's just put it in week6 as that was the default
+       newWeeklyDiets['week6'] = profile.diet;
+    }
+
+    if (setProfile) {
+      setProfile({ 
+        ...profile, 
+        weeklyDiets: newWeeklyDiets,
+        selectedWeekId: 'week6'
+      });
+    }
+  }, [profile, defaultDietTemplate, readOnly, setProfile]);
+
+  const weeklyDiet = useMemo(() => {
+    if (customDiet) return customDiet;
+    
+    // Use the selected week from weeklyDiets
+    if (profile.weeklyDiets && profile.weeklyDiets[activeWeek]) {
+      return profile.weeklyDiets[activeWeek];
+    }
+    
+    // Fallback to legacy diet or default
+    return profile.diet || defaultDietTemplate;
+  }, [customDiet, profile.diet, profile.weeklyDiets, activeWeek, defaultDietTemplate]);
 
   const allPreviousMeals = useMemo(() => {
     const meals: any[] = [];
@@ -163,12 +193,73 @@ const DietView: React.FC<DietViewProps> = ({ gymSettings, profile, setProfile, r
     if (!auth.currentUser || readOnly) return;
     const newHistory = { ...consumedHistory };
     const dayData = { ...(newHistory[selectedDay] || {}) };
-    dayData[mealKey] = !dayData[mealKey];
+    const isCompleted = !dayData[mealKey];
+    dayData[mealKey] = isCompleted;
     newHistory[selectedDay] = dayData;
 
     setConsumedHistory(newHistory);
     const dietRef = doc(db, 'dietProgress', auth.currentUser.uid);
     await setDoc(dietRef, sanitizeForFirestore({ history: newHistory }), { merge: true });
+
+    if (profile.weeklyTargets && setProfile) {
+      const meal = weeklyDiet[selectedDay]?.[mealKey];
+      if (meal) {
+        const textToAnalyze = (meal.fullTitle + ' ' + meal.desc).toLowerCase();
+        const targetIdsToUpdate: string[] = [];
+
+        // White meat
+        if (textToAnalyze.includes('pollo') || textToAnalyze.includes('tacchino') || textToAnalyze.includes('carne bianca')) {
+          targetIdsToUpdate.push('white_meat');
+        }
+        
+        // Red meat
+        if (textToAnalyze.includes('manzo') || textToAnalyze.includes('vitello') || textToAnalyze.includes('carne rossa')) {
+          targetIdsToUpdate.push('red_meat');
+        }
+        
+        // Fish
+        if (textToAnalyze.includes('pesce') || textToAnalyze.includes('tonno') || textToAnalyze.includes('sgombro') || textToAnalyze.includes('salmone') || textToAnalyze.includes('merluzzo') || textToAnalyze.includes('nasello') || textToAnalyze.includes('orata') || textToAnalyze.includes('spigola')) {
+          targetIdsToUpdate.push('fish');
+        }
+        
+        // Eggs
+        if (textToAnalyze.includes('uova') || textToAnalyze.includes('albume')) {
+          targetIdsToUpdate.push('eggs');
+        }
+        
+        // Cheese
+        if (textToAnalyze.includes('formaggio') || textToAnalyze.includes('parmigiano') || textToAnalyze.includes('mozzarella') || textToAnalyze.includes('fiocchi di latte') || textToAnalyze.includes('yogurt') || textToAnalyze.includes('latte')) {
+          targetIdsToUpdate.push('cheese');
+        }
+        
+        // Legumes
+        if (textToAnalyze.includes('legumi') || textToAnalyze.includes('fagioli') || textToAnalyze.includes('ceci') || textToAnalyze.includes('lenticchie') || textToAnalyze.includes('piselli')) {
+          targetIdsToUpdate.push('legumes');
+        }
+        
+        // Processed (including Tonno as requested)
+        if (textToAnalyze.includes('affettato') || textToAnalyze.includes('fesa') || textToAnalyze.includes('prosciutto') || textToAnalyze.includes('bresaola') || textToAnalyze.includes('salame') || textToAnalyze.includes('wurstel') || textToAnalyze.includes('tonno') || textToAnalyze.includes('in scatola') || textToAnalyze.includes('affumicato')) {
+          targetIdsToUpdate.push('processed');
+        }
+
+        if (targetIdsToUpdate.length > 0) {
+          const newTargets = profile.weeklyTargets.map(t => {
+            if (targetIdsToUpdate.includes(t.id)) {
+              const change = isCompleted ? 1 : -1;
+              return { ...t, current: Math.max(0, t.current + change) };
+            }
+            return t;
+          });
+          
+          // Update local profile state immediately for UI responsiveness
+          setProfile({ ...profile, weeklyTargets: newTargets });
+          
+          // Update Firestore
+          const userRef = doc(db, 'users', auth.currentUser.uid);
+          await updateDoc(userRef, { weeklyTargets: newTargets });
+        }
+      }
+    }
   };
 
   const generateRecipe = async (mealKey: string, desc: string) => {
@@ -216,14 +307,29 @@ const DietView: React.FC<DietViewProps> = ({ gymSettings, profile, setProfile, r
       .map(item => `${item.amount} ${item.name}`)
       .join(' + ');
 
-    const newDiet = { ...weeklyDiet };
-    newDiet[editingMeal.day] = {
-      ...newDiet[editingMeal.day],
-      [editingMeal.key]: { ...editingMeal.data, desc }
+    // Create a copy of the current week's diet
+    const currentWeekDiet = JSON.parse(JSON.stringify(weeklyDiet));
+    
+    // Update the specific meal
+    if (!currentWeekDiet[editingMeal.day]) {
+      currentWeekDiet[editingMeal.day] = {};
+    }
+    
+    currentWeekDiet[editingMeal.day][editingMeal.key] = { ...editingMeal.data, desc };
+
+    // Update the full weeklyDiets structure
+    const newWeeklyDiets = { 
+      ...(profile.weeklyDiets || {}),
+      [activeWeek]: currentWeekDiet 
     };
 
     try {
-      await setProfile({ ...profile, diet: newDiet });
+      await setProfile({ 
+        ...profile, 
+        weeklyDiets: newWeeklyDiets,
+        // Also update legacy diet field for backward compatibility if needed, or just rely on weeklyDiets
+        diet: currentWeekDiet 
+      });
       setEditingMeal(null);
     } catch (error) {
       console.error("Error saving meal:", error);
@@ -410,7 +516,25 @@ const DietView: React.FC<DietViewProps> = ({ gymSettings, profile, setProfile, r
           </div>
           
           {!readOnly && (
-            <div className="flex flex-col items-end gap-2">
+            <div className="flex items-center gap-2">
+              <select
+                value={activeWeek}
+                onChange={(e) => {
+                  const newWeek = e.target.value;
+                  setActiveWeek(newWeek);
+                  if (setProfile) {
+                    setProfile({ ...profile, selectedWeekId: newWeek });
+                  }
+                }}
+                className="bg-white dark:bg-slate-800 border border-rose-100 dark:border-slate-700 text-rose-500 font-black text-[10px] uppercase tracking-widest py-2 px-3 rounded-xl outline-none shadow-sm flex-1 max-w-[150px]"
+              >
+                {daysOfWeek.map((day, index) => (
+                  <option key={`week${index + 1}`} value={`week${index + 1}`}>
+                    Settimana {index + 1} (Sgarro {day})
+                  </option>
+                ))}
+              </select>
+
               <input 
                 type="file" 
                 accept="application/pdf" 
@@ -421,23 +545,21 @@ const DietView: React.FC<DietViewProps> = ({ gymSettings, profile, setProfile, r
               <button 
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isUploading}
-                className="bg-rose-500 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-rose-200 dark:shadow-none hover:bg-rose-600 transition-all flex items-center gap-2"
+                className="bg-rose-500 text-white px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-rose-200 dark:shadow-none hover:bg-rose-600 transition-all flex items-center gap-1 whitespace-nowrap"
               >
                 {isUploading ? (
-                  <>
-                    <div className="w-3 h-3 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
-                    Analisi...
-                  </>
+                  <div className="w-3 h-3 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
                 ) : (
-                  <>📄 Carica PDF</>
+                  <>📄 PDF</>
                 )}
               </button>
+              
               {profile.diet && setProfile && (
                 <button 
                   onClick={() => setProfile({ ...profile, diet: undefined })}
-                  className="text-[8px] font-black text-gray-400 uppercase tracking-widest hover:text-rose-500 transition-colors"
+                  className="text-[8px] font-black text-gray-400 uppercase tracking-widest hover:text-rose-500 transition-colors whitespace-nowrap"
                 >
-                  Reset Dieta
+                  Reset
                 </button>
               )}
             </div>

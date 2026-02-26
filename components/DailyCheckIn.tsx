@@ -13,7 +13,7 @@ interface Question {
 }
 
 const DailyCheckIn: React.FC<DailyCheckInProps> = ({ onClose, gymSettings }) => {
-  const [isAnswering, setIsAnswering] = useState<'yes' | 'no' | null>(null);
+  const [isAnswering, setIsAnswering] = useState<'yes' | 'no' | 'skip' | null>(null);
   const [answeredIds, setAnsweredIds] = useState<string[]>([]);
   const [skippedIds, setSkippedIds] = useState<string[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -69,7 +69,7 @@ const DailyCheckIn: React.FC<DailyCheckInProps> = ({ onClose, gymSettings }) => 
     }
   }, [isInitialized, remainingQuestions.length, onClose]);
 
-  const handleAnswer = (questionId: string, type: 'yes' | 'no') => {
+  const handleAnswer = (questionId: string, type: 'yes' | 'no' | 'skip') => {
     if (isAnswering) return;
     setIsAnswering(type);
 
@@ -77,8 +77,8 @@ const DailyCheckIn: React.FC<DailyCheckInProps> = ({ onClose, gymSettings }) => 
       let nextDone = [...answeredIds];
       let nextSkipped = [...skippedIds];
 
-      if (type === 'yes') {
-        nextDone.push(questionId);
+      if (type === 'yes' || type === 'skip') {
+        nextDone.push(questionId); // Treat skipped as done for the purpose of removing from queue
       } else {
         nextSkipped.push(questionId);
       }
@@ -120,6 +120,18 @@ const DailyCheckIn: React.FC<DailyCheckInProps> = ({ onClose, gymSettings }) => 
           >
             {isAnswering === 'yes' ? '✅ Grandiosa!' : 'Sì, fatto!'}
           </button>
+
+          {currentQuestion.id === 'snack_afternoon' && (
+            <button 
+              disabled={!!isAnswering}
+              onClick={() => handleAnswer(currentQuestion.id, 'skip')}
+              className={`w-full font-bold py-4 rounded-2xl text-lg transition-all ${
+                isAnswering === 'skip' ? 'bg-gray-400 text-white' : 'bg-gray-100 text-gray-500 active:scale-95'
+              }`}
+            >
+              {isAnswering === 'skip' ? '⏭️ Saltato' : 'Salto oggi'}
+            </button>
+          )}
 
           <button 
             disabled={!!isAnswering}

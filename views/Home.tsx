@@ -122,21 +122,45 @@ const HomeView: React.FC<HomeViewProps> = ({ profile }) => {
     return () => unsub();
   }, []);
 
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  
+  useEffect(() => {
+    const currentVersion = '2.1.0';
+    const savedVersion = localStorage.getItem('rosyfit_update_version');
+    if (savedVersion !== currentVersion) {
+      setShowUpdateModal(true);
+      localStorage.setItem('rosyfit_update_version', currentVersion);
+    }
+  }, []);
+
+  // ... (existing useEffects)
+
   const groupedPosts = useMemo(() => {
-    const groups: Record<string, Record<string, any[]>> = {};
+    // Filter posts by selected date
+    const datePosts = feedPosts.filter(post => {
+      const postDate = post.timestamp.toISOString().split('T')[0];
+      return postDate === selectedDate;
+    });
 
-    feedPosts.forEach(post => {
-      const dateKey = post.timestamp.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const groups: Record<string, any[]> = {};
+    
+    // Sort categories order
+    const categoryOrder = ['Colazione', 'Spuntino', 'Pranzo', 'Merenda', 'Cena', 'Pasto Fit', 'Cheat Meal', 'Altro'];
+
+    datePosts.forEach(post => {
       const mealType = post.type || 'Altro';
+      if (!groups[mealType]) groups[mealType] = [];
+      groups[mealType].push(post);
+    });
 
-      if (!groups[dateKey]) groups[dateKey] = {};
-      if (!groups[dateKey][mealType]) groups[dateKey][mealType] = [];
-      
-      groups[dateKey][mealType].push(post);
+    // Sort posts within groups by time
+    Object.keys(groups).forEach(key => {
+      groups[key].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
     });
 
     return groups;
-  }, [feedPosts]);
+  }, [feedPosts, selectedDate]);
 
   useEffect(() => {
     const checkSkippedTasks = () => {
@@ -487,72 +511,138 @@ const HomeView: React.FC<HomeViewProps> = ({ profile }) => {
         </div>
       </div>
 
-      <h2 className="text-xl font-bold">Diario Alimentare</h2>
+      <div className="flex justify-between items-center">
+        <h2 className="text-xl font-bold">Diario Alimentare</h2>
+        <input 
+          type="date" 
+          value={selectedDate}
+          onChange={(e) => setSelectedDate(e.target.value)}
+          className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold uppercase tracking-widest text-gray-500 outline-none focus:border-rose-500 transition-colors"
+        />
+      </div>
+
       <div className="space-y-10">
         {Object.keys(groupedPosts).length === 0 ? (
           <div className="text-center py-10 border-2 border-dashed border-gray-100 dark:border-slate-800 rounded-3xl">
-            <p className="text-gray-400 text-sm italic">Ancora nessun post. Inizia a fotografare i tuoi pasti!</p>
+            <p className="text-gray-400 text-sm italic">
+              {selectedDate === todayStr ? "Ancora nessun post oggi. Inizia a fotografare i tuoi pasti!" : "Nessun post in questa data."}
+            </p>
           </div>
         ) : (
-          Object.entries(groupedPosts).map(([date, mealGroups]) => (
-            <div key={date} className="space-y-6">
+          Object.entries(groupedPosts).map(([mealType, posts]) => (
+            <div key={mealType} className="space-y-4">
               <div className="sticky top-0 z-20 bg-gray-50/80 dark:bg-slate-900/80 backdrop-blur-sm py-2">
                 <h3 className="text-sm font-black uppercase tracking-[0.3em] text-rose-500 border-b border-rose-100 dark:border-rose-900/30 pb-1">
-                  {date}
+                  {mealType}
                 </h3>
               </div>
               
-              {Object.entries(mealGroups).map(([mealType, posts]) => (
-                <div key={mealType} className="space-y-4">
-                  <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-2">
-                    {mealType}
-                  </h4>
-                  <div className="grid grid-cols-1 gap-4">
-                    {posts.map((post) => (
-                      <div key={post.id} className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm overflow-hidden border border-gray-100 dark:border-slate-700 group">
-                        <div className="p-4 flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-rose-100 flex items-center justify-center font-bold text-rose-500 text-xs overflow-hidden">
-                            {post.userAvatar ? (
-                              <img src={post.userAvatar} alt={post.userName} className="w-full h-full object-cover" />
-                            ) : (
-                              post.userName?.[0]
-                            )}
-                          </div>
-                          <div className="flex-1">
-                            <span className="font-bold block text-xs">{post.userName}</span>
-                            <span className="text-[9px] text-gray-400 uppercase font-bold">
-                              {post.timestamp.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                          </div>
-                        </div>
-                        <img src={post.image} className="w-full h-48 object-cover" alt="Meal" />
-                        <div className="p-4">
-                          <p className="text-sm text-gray-800 dark:text-gray-200 mb-4">{post.description}</p>
-                          <div className="flex items-center justify-between">
-                            <button 
-                              onClick={() => handleLike(post)}
-                              disabled={post.userId === auth.currentUser?.uid}
-                              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
-                                post.likes?.includes(auth.currentUser?.uid) 
-                                  ? 'bg-rose-500 text-white shadow-lg shadow-rose-200' 
-                                  : 'bg-gray-50 dark:bg-slate-700 text-gray-400'
-                              } ${post.userId === auth.currentUser?.uid ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'}`}
-                            >
-                              <span>{post.likes?.includes(auth.currentUser?.uid) ? '❤️' : '🤍'}</span>
-                              <span>{post.likes?.length || 0}</span>
-                            </button>
-                            <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest">{post.mealType}</span>
-                          </div>
-                        </div>
+              <div className="grid grid-cols-1 gap-4">
+                {(posts as any[]).map((post) => (
+                  <div key={post.id} className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm overflow-hidden border border-gray-100 dark:border-slate-700 group">
+                    <div className="p-4 flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-rose-100 flex items-center justify-center font-bold text-rose-500 text-xs overflow-hidden">
+                        {post.userAvatar ? (
+                          <img src={post.userAvatar} alt={post.userName} className="w-full h-full object-cover" />
+                        ) : (
+                          post.userName?.[0]
+                        )}
                       </div>
-                    ))}
+                      <div className="flex-1">
+                        <span className="font-bold block text-xs">{post.userName}</span>
+                        <span className="text-[9px] text-gray-400 uppercase font-bold">
+                          {post.timestamp.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                    </div>
+                    <img src={post.image} className="w-full h-48 object-cover" alt="Meal" />
+                    <div className="p-4">
+                      <p className="text-sm text-gray-800 dark:text-gray-200 mb-4">{post.description}</p>
+                      <div className="flex items-center justify-between">
+                        <button 
+                          onClick={() => handleLike(post)}
+                          disabled={post.userId === auth.currentUser?.uid}
+                          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+                            post.likes?.includes(auth.currentUser?.uid) 
+                              ? 'bg-rose-500 text-white shadow-lg shadow-rose-200' 
+                              : 'bg-gray-50 dark:bg-slate-700 text-gray-400'
+                          } ${post.userId === auth.currentUser?.uid ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'}`}
+                        >
+                          <span>{post.likes?.includes(auth.currentUser?.uid) ? '❤️' : '🤍'}</span>
+                          <span>{post.likes?.length || 0}</span>
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           ))
         )}
       </div>
+
+      <AnimatePresence>
+        {showUpdateModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6"
+            onClick={() => setShowUpdateModal(false)}
+          >
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white dark:bg-slate-900 w-full max-w-md rounded-[2.5rem] p-8 shadow-2xl overflow-hidden relative"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-rose-400 via-purple-500 to-indigo-500" />
+              
+              <div className="text-center mb-8">
+                <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center text-3xl mx-auto mb-4 shadow-inner">
+                  🚀
+                </div>
+                <h2 className="text-2xl font-black tracking-tighter uppercase text-slate-800 dark:text-white">Novità RosyFit 2.1</h2>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">Aggiornamento disponibile</p>
+              </div>
+
+              <div className="space-y-6 mb-8">
+                <div className="flex gap-4 items-start">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center text-lg flex-shrink-0">📸</div>
+                  <div>
+                    <h3 className="font-bold text-sm text-slate-800 dark:text-white">Diario Alimentare Avanzato</h3>
+                    <p className="text-xs text-gray-500 mt-1">Ora puoi caricare foto specificando categoria e descrizione dettagliata per ogni pasto.</p>
+                  </div>
+                </div>
+                
+                <div className="flex gap-4 items-start">
+                  <div className="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center text-lg flex-shrink-0">📅</div>
+                  <div>
+                    <h3 className="font-bold text-sm text-slate-800 dark:text-white">Calendario Pasti</h3>
+                    <p className="text-xs text-gray-500 mt-1">Naviga facilmente tra i giorni passati per rivedere i tuoi progressi alimentari.</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-4 items-start">
+                  <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center text-lg flex-shrink-0">🥨</div>
+                  <div>
+                    <h3 className="font-bold text-sm text-slate-800 dark:text-white">Spuntino Opzionale</h3>
+                    <p className="text-xs text-gray-500 mt-1">Il secondo spuntino ora è facoltativo. Puoi saltarlo senza interrompere la tua streak!</p>
+                  </div>
+                </div>
+              </div>
+
+              <button 
+                onClick={() => setShowUpdateModal(false)}
+                className="w-full py-4 bg-rose-500 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl shadow-rose-200 dark:shadow-none hover:bg-rose-600 transition-all active:scale-95"
+              >
+                Fantastico! Iniziamo
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
