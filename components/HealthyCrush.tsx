@@ -5,6 +5,8 @@ import { auth, db } from '../services/firebase';
 import { collection, addDoc, query, orderBy, limit, onSnapshot, Timestamp, getDocs, where } from 'firebase/firestore';
 import { GameScore } from '../types';
 
+import { sendNotification } from '../services/notifications';
+
 interface HealthyCrushProps {
   userName: string;
   onClose: () => void;
@@ -138,6 +140,8 @@ const HealthyCrush: React.FC<HealthyCrushProps> = ({ userName, onClose }) => {
         score: finalScore,
         timestamp: Timestamp.now()
       });
+      
+      sendNotification('Nuovo Record! 🏆', `Hai battuto il tuo record a Healthy Crush con ${finalScore} punti!`);
     } catch (e) {
       console.error('Error saving score:', e);
     }

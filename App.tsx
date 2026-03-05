@@ -3,8 +3,9 @@ import React, { useState, useEffect } from 'react';
 import { View, UserProfile, GymSettings } from './types';
 import { auth, db } from './services/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, setDoc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot, updateDoc, collection, query, where } from 'firebase/firestore';
 import { sanitizeForFirestore } from './services/utils';
+import { requestNotificationPermission, sendNotification } from './services/notifications';
 import LoginView from './views/Login';
 import HomeView from './views/Home';
 import DietView from './views/Diet';
@@ -90,6 +91,25 @@ const App: React.FC = () => {
           }
         });
 
+        // Richiesta permessi notifiche
+        requestNotificationPermission();
+
+        // Listener Notifiche
+        const q = query(collection(db, 'notifications'), where('userId', '==', user.uid), where('read', '==', false));
+        let isInitialLoad = true;
+        onSnapshot(q, (snap) => {
+          if (isInitialLoad) {
+            isInitialLoad = false;
+            return;
+          }
+          snap.docChanges().forEach((change) => {
+            if (change.type === 'added') {
+              const data = change.doc.data();
+              sendNotification('Nuova Notifica 🔔', data.message);
+            }
+          });
+        });
+
       } else {
         setIsAuthenticated(false);
       }
@@ -97,6 +117,18 @@ const App: React.FC = () => {
     });
 
     return () => unsubscribeAuth();
+  }, []);
+
+  // Promemoria Spuntino delle 17:00
+  useEffect(() => {
+    const checkTime = () => {
+      const now = new Date();
+      if (now.getHours() === 17 && now.getMinutes() === 0) {
+        sendNotification('È l\'ora dello spuntino! 🍎', 'Ricordati di fare una pausa sana.');
+      }
+    };
+    const interval = setInterval(checkTime, 60000); // Check every minute
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {

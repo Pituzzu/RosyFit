@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { UserProfile } from '../types';
 import { auth, db } from '../services/firebase';
-import { collection, query, where, getDocs, updateDoc, arrayUnion, arrayRemove, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, updateDoc, arrayUnion, doc, addDoc } from 'firebase/firestore';
 
 interface ProfileViewProps {
   profile: UserProfile;
@@ -16,8 +16,9 @@ const ProfileView: React.FC<ProfileViewProps> = ({ profile, setProfile, onViewFr
   const [isUploading, setIsUploading] = useState(false);
   const [inviteCodeInput, setInviteCodeInput] = useState('');
   const [isSendingRequest, setIsSendingRequest] = useState(false);
-  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
   const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [adminNotifTitle, setAdminNotifTitle] = useState('');
+  const [adminNotifBody, setAdminNotifBody] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isAdmin = auth.currentUser?.email === 'matteopituzzu@gmail.com';
@@ -39,30 +40,36 @@ const ProfileView: React.FC<ProfileViewProps> = ({ profile, setProfile, onViewFr
     }
   }, [isAdmin]);
 
+  const handleSendGlobalNotification = async () => {
+    if (!adminNotifTitle || !adminNotifBody) return;
+    if (!confirm('Sei sicuro di voler inviare questa notifica a TUTTI gli utenti?')) return;
+
+    try {
+      const promises = allUsers.map(user => 
+        addDoc(collection(db, 'notifications'), {
+          userId: user.id,
+          type: 'admin_broadcast',
+          message: `${adminNotifTitle}: ${adminNotifBody}`,
+          read: false,
+          timestamp: new Date()
+        })
+      );
+      await Promise.all(promises);
+      alert('Notifica inviata a tutti!');
+      setAdminNotifTitle('');
+      setAdminNotifBody('');
+    } catch (err) {
+      console.error(err);
+      alert('Errore invio notifica');
+    }
+  };
+
   // Reset editForm when toggling editing
   useEffect(() => {
     if (!isEditing) {
       setEditForm({});
     }
   }, [isEditing]);
-
-  useEffect(() => {
-    const fetchRequests = async () => {
-      if (profile.friendRequests && profile.friendRequests.length > 0) {
-        const requests = [];
-        for (const uid of profile.friendRequests) {
-          const userDoc = await getDoc(doc(db, 'users', uid));
-          if (userDoc.exists()) {
-            requests.push({ id: uid, ...userDoc.data() });
-          }
-        }
-        setPendingRequests(requests);
-      } else {
-        setPendingRequests([]);
-      }
-    };
-    fetchRequests();
-  }, [profile.friendRequests]);
 
   const handleLogout = async () => {
     try {
@@ -378,7 +385,31 @@ const ProfileView: React.FC<ProfileViewProps> = ({ profile, setProfile, onViewFr
 
       {isAdmin && (
         <div className="bg-white dark:bg-slate-800 p-6 rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-slate-700">
-          <h3 className="font-black text-xs uppercase tracking-widest text-emerald-500 mb-4">Tutti gli Utenti (Admin)</h3>
+          <h3 className="font-black text-xs uppercase tracking-widest text-emerald-500 mb-4">Invia Notifica Globale (Admin)</h3>
+          <div className="flex flex-col gap-3 mb-6">
+            <input 
+              type="text" 
+              placeholder="Titolo Notifica" 
+              value={adminNotifTitle}
+              onChange={e => setAdminNotifTitle(e.target.value)}
+              className="bg-gray-50 dark:bg-slate-900 p-4 rounded-2xl text-sm font-bold outline-none border border-transparent focus:border-emerald-500"
+            />
+            <textarea 
+              placeholder="Messaggio Notifica" 
+              value={adminNotifBody}
+              onChange={e => setAdminNotifBody(e.target.value)}
+              className="bg-gray-50 dark:bg-slate-900 p-4 rounded-2xl text-sm font-bold outline-none border border-transparent focus:border-emerald-500 min-h-[100px]"
+            />
+            <button 
+              onClick={handleSendGlobalNotification}
+              disabled={!adminNotifTitle || !adminNotifBody}
+              className="bg-emerald-500 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg active:scale-95 transition-all disabled:opacity-50"
+            >
+              Invia a Tutti
+            </button>
+          </div>
+
+          <h3 className="font-black text-xs uppercase tracking-widest text-emerald-500 mb-4">Tutti gli Utenti ({allUsers.length})</h3>
           <div className="space-y-4 max-h-64 overflow-y-auto pr-2">
             {allUsers.map(user => (
               <div key={user.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-900 rounded-2xl">
