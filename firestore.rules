@@ -35,6 +35,11 @@ service cloud.firestore {
       allow read, write: if isOwner(userId);
     }
 
+    // Diet Progress
+    match /dietProgress/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
     // Game scores
     match /gameScores/{scoreId} {
       allow read: if isAuthenticated();

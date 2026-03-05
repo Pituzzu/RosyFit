@@ -165,6 +165,9 @@ const DietView: React.FC<DietViewProps> = ({ gymSettings, profile, setProfile, r
         setConsumedHistory(docSnap.data().history || {});
       }
       setIsLoading(false);
+    }, (error) => {
+      console.error("Error fetching diet progress:", error);
+      setIsLoading(false);
     });
 
     return () => unsubscribe();

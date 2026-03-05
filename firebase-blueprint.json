@@ -111,6 +111,14 @@
         "days": { "type": "array" },
         "timeOfDay": { "type": "string" }
       }
+    },
+    "DietProgress": {
+      "title": "Diet Progress",
+      "description": "Tracks consumed meals history.",
+      "type": "object",
+      "properties": {
+        "history": { "type": "object" }
+      }
     }
   },
   "firestore": {
@@ -141,6 +149,10 @@
     "/settings/{userId}": {
       "schema": "Settings",
       "description": "User settings."
+    },
+    "/dietProgress/{userId}": {
+      "schema": "DietProgress",
+      "description": "User diet progress tracking."
     }
   }
 }
