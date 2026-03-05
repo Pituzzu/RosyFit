@@ -3,7 +3,7 @@ import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 import { WeeklyDiet } from "../types";
 
 // Use process.env.API_KEY directly as per guidelines.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
 
 const dietSchema = {
   type: Type.OBJECT,
