@@ -426,11 +426,11 @@ const HomeView: React.FC<HomeViewProps> = ({ profile, onViewFriend }) => {
               setShowNotifications(true);
               markNotificationsAsRead();
             }}
-            className="relative w-12 h-12 rounded-full bg-white dark:bg-slate-800 flex items-center justify-center shadow-md border border-gray-100 dark:border-slate-700"
+            className="relative w-12 h-12 rounded-full bg-white dark:bg-slate-800 flex items-center justify-center shadow-md border border-gray-100 dark:border-slate-700 active:scale-95 transition-transform"
           >
             <span className="text-xl">🔔</span>
             {unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-5 h-5 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-white dark:border-slate-900">
+              <span className="absolute -top-1 -right-1 w-5 h-5 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-white dark:border-slate-900 animate-pulse">
                 {unreadCount}
               </span>
             )}

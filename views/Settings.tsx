@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { GymSettings } from '../types';
+import { requestNotificationPermission } from '../services/notifications';
 
 interface SettingsViewProps {
   darkMode: boolean;
@@ -19,9 +20,33 @@ const SettingsView: React.FC<SettingsViewProps> = ({ darkMode, setDarkMode, gymS
     setGymSettings({ ...gymSettings, days: newDays });
   };
 
+  const handleEnableNotifications = async () => {
+    const granted = await requestNotificationPermission();
+    if (granted) {
+      alert('Notifiche abilitate! 🔔');
+    } else {
+      alert('Permesso negato o non supportato.');
+    }
+  };
+
   return (
     <div className="p-4 space-y-8">
       <h1 className="text-2xl font-bold">Impostazioni</h1>
+
+      <section className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-slate-700 space-y-6">
+        <div className="flex justify-between items-center">
+          <div>
+            <h3 className="font-bold">Notifiche Push</h3>
+            <p className="text-xs text-gray-500">Ricevi avvisi su record e amici</p>
+          </div>
+          <button 
+            onClick={handleEnableNotifications}
+            className="bg-emerald-500 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all"
+          >
+            Abilita
+          </button>
+        </div>
+      </section>
 
       <section className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-slate-700 space-y-6">
         <div className="flex justify-between items-center">
