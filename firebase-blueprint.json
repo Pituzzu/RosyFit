@@ -20,7 +20,17 @@
         "selectedWeekId": { "type": "string" },
         "weeklyDiets": { "type": "object" },
         "weeklyTargets": { "type": "array" },
-        "lastTargetUpdateWeek": { "type": "string" }
+        "lastTargetUpdateWeek": { "type": "string" },
+        "friends": { "type": "array" },
+        "friendRequests": { "type": "array" },
+        "sentRequests": { "type": "array" },
+        "streak": { "type": "number" },
+        "lastStreakDate": { "type": "string" },
+        "inviteCode": { "type": "string" },
+        "avatar": { "type": "string" },
+        "waterGoal": { "type": "number" },
+        "targetWeight": { "type": "number" },
+        "isDietPublic": { "type": "boolean" }
       },
       "required": ["uid", "name", "email"]
     },
@@ -35,6 +45,72 @@
         "timestamp": { "type": "string", "format": "date-time" }
       },
       "required": ["userId", "userName", "score", "timestamp"]
+    },
+    "Meal": {
+      "title": "Meal",
+      "description": "A meal post shared by a user.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userAvatar": { "type": "string" },
+        "image": { "type": "string" },
+        "description": { "type": "string" },
+        "type": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "likes": { "type": "array" }
+      },
+      "required": ["userId", "image", "timestamp"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "User notifications.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "fromUserId": { "type": "string" },
+        "fromUserName": { "type": "string" },
+        "type": { "type": "string" },
+        "message": { "type": "string" },
+        "read": { "type": "boolean" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "link": { "type": "string" },
+        "handled": { "type": "boolean" }
+      },
+      "required": ["userId", "message", "timestamp"]
+    },
+    "DailyStats": {
+      "title": "Daily Stats",
+      "description": "Daily tracking stats like water intake.",
+      "type": "object",
+      "properties": {
+        "water": { "type": "number" },
+        "date": { "type": "string" }
+      },
+      "required": ["date"]
+    },
+    "News": {
+      "title": "News",
+      "description": "App news and updates.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "type": { "type": "string" },
+        "active": { "type": "boolean" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "content"]
+    },
+    "Settings": {
+      "title": "Settings",
+      "description": "User settings.",
+      "type": "object",
+      "properties": {
+        "isActive": { "type": "boolean" },
+        "days": { "type": "array" },
+        "timeOfDay": { "type": "string" }
+      }
     }
   },
   "firestore": {
@@ -45,6 +121,26 @@
     "/gameScores/{scoreId}": {
       "schema": "GameScore",
       "description": "Global leaderboard for the mini-game."
+    },
+    "/meals/{mealId}": {
+      "schema": "Meal",
+      "description": "Social feed posts."
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "User notifications."
+    },
+    "/dailyStats/{statId}": {
+      "schema": "DailyStats",
+      "description": "Daily user statistics."
+    },
+    "/news/{newsId}": {
+      "schema": "News",
+      "description": "Global news."
+    },
+    "/settings/{userId}": {
+      "schema": "Settings",
+      "description": "User settings."
     }
   }
 }

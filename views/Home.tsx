@@ -113,29 +113,34 @@ const HomeView: React.FC<HomeViewProps> = ({ profile, onViewFriend }) => {
     if (!auth.currentUser) return;
     
     const myUid = auth.currentUser.uid;
-    const friendIds = (profile.friends || []).map(f => f.id);
-    const allRelevantIds = [myUid, ...friendIds].slice(0, 30);
+    const friendIds = (profile.friends || [])
+      .map(f => f.id)
+      .filter(id => id && typeof id === 'string'); // Sanitize IDs
+    
+    const allRelevantIds = new Set([myUid, ...friendIds]);
 
+    // Fetch latest posts globally and filter client-side to avoid complex index requirements
     const q = query(
       collection(db, 'meals'), 
-      where('userId', 'in', allRelevantIds),
       orderBy('timestamp', 'desc'), 
-      limit(15)
+      limit(50)
     );
 
     const unsub = onSnapshot(q, (snap) => {
-      const posts = snap.docs.map(doc => {
-        const data = doc.data();
-        return { 
-          id: doc.id, 
-          ...data,
-          timestamp: data.timestamp ? (data.timestamp as any).toDate() : new Date()
-        };
-      });
+      const posts = snap.docs
+        .map(doc => {
+          const data = doc.data();
+          return { 
+            id: doc.id, 
+            ...data,
+            timestamp: data.timestamp ? (data.timestamp as any).toDate() : new Date()
+          };
+        })
+        .filter(post => allRelevantIds.has(post.userId)); // Client-side filter
+
       setFeedPosts(posts);
     }, (error: any) => {
       console.error("Errore Home Feed:", error);
-      // Silently fail or show minimal info for home feed index errors
     });
     return () => unsub();
   }, [profile.friends]);
@@ -228,7 +233,7 @@ const HomeView: React.FC<HomeViewProps> = ({ profile, onViewFriend }) => {
       const nextCount = parseFloat((waterGlasses + 0.25).toFixed(2));
       setWaterGlasses(nextCount);
       const waterRef = doc(db, 'dailyStats', `${auth.currentUser.uid}_${todayStr}`);
-      await setDoc(waterRef, { water: nextCount, date: todayStr }, { merge: true });
+      await setDoc(waterRef, { water: nextCount, date: todayStr, userId: auth.currentUser.uid }, { merge: true });
     }
   };
 
