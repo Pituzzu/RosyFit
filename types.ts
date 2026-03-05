@@ -48,7 +48,14 @@ export interface UserProfile {
   lastStreakDate?: string;
   avatar?: string;
   friends: Friend[];
+  friendRequests?: string[]; // Array of UIDs who sent a request
+  sentRequests?: string[]; // Array of UIDs to whom a request was sent
+  inviteCode?: string;
+  isDietPublic?: boolean;
   weight: number;
+  targetWeight?: number;
+  waterGoal?: number; // in liters
+  dailyCalories?: number;
   height: number;
   bmi: number;
   diet?: WeeklyDiet;
@@ -102,4 +109,12 @@ export interface GymSettings {
   isActive: boolean;
   days: string[]; // e.g., ["Lunedì", "Mercoledì"]
   timeOfDay: 'morning' | 'afternoon';
+}
+
+export interface GameScore {
+  id?: string;
+  userId: string;
+  userName: string;
+  score: number;
+  timestamp: Date;
 }

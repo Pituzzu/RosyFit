@@ -490,7 +490,7 @@ const DietView: React.FC<DietViewProps> = ({ gymSettings, profile, setProfile, r
     );
   };
 
-  const kcalGoal = 1500;
+  const kcalGoal = profile.dailyCalories || 2000;
   const progress = Math.min(100, (totals.kcal / kcalGoal) * 100);
 
   return (

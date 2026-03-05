@@ -4,12 +4,15 @@ import { motion, AnimatePresence } from 'motion/react';
 import { UserProfile, Notification, News } from '../types';
 import { auth, db } from '../services/firebase';
 import { collection, query, orderBy, limit, onSnapshot, doc, getDoc, setDoc, updateDoc, arrayUnion, arrayRemove, addDoc, Timestamp, where } from 'firebase/firestore';
+import HealthyCrush from '../components/HealthyCrush';
+import Leaderboard from '../components/Leaderboard';
 
 interface HomeViewProps {
   profile: UserProfile;
+  onViewFriend: (userId: string) => void;
 }
 
-const HomeView: React.FC<HomeViewProps> = ({ profile }) => {
+const HomeView: React.FC<HomeViewProps> = ({ profile, onViewFriend }) => {
   const [waterGlasses, setWaterGlasses] = useState(0);
   const [skippedIds, setSkippedIds] = useState<string[]>([]);
   const [feedPosts, setFeedPosts] = useState<any[]>([]);
@@ -17,7 +20,7 @@ const HomeView: React.FC<HomeViewProps> = ({ profile }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [dailyQuote, setDailyQuote] = useState('');
-  const totalWaterGoal = 10;
+  const totalWaterGoal = profile.waterGoal || 2.5;
   const todayStr = new Date().toISOString().split('T')[0];
 
   const motivationalQuotes = [
@@ -107,32 +110,61 @@ const HomeView: React.FC<HomeViewProps> = ({ profile }) => {
 
   // Caricamento Post Reali
   useEffect(() => {
-    const q = query(collection(db, 'meals'), orderBy('timestamp', 'desc'), limit(20));
+    if (!auth.currentUser) return;
+    
+    const myUid = auth.currentUser.uid;
+    const friendIds = (profile.friends || []).map(f => f.id);
+    const allRelevantIds = [myUid, ...friendIds].slice(0, 30);
+
+    const q = query(
+      collection(db, 'meals'), 
+      where('userId', 'in', allRelevantIds),
+      orderBy('timestamp', 'desc'), 
+      limit(15)
+    );
+
     const unsub = onSnapshot(q, (snap) => {
       const posts = snap.docs.map(doc => {
         const data = doc.data();
         return { 
           id: doc.id, 
           ...data,
-          timestamp: data.timestamp?.toDate() || new Date()
+          timestamp: data.timestamp ? (data.timestamp as any).toDate() : new Date()
         };
       });
       setFeedPosts(posts);
+    }, (error: any) => {
+      console.error("Errore Home Feed:", error);
+      // Silently fail or show minimal info for home feed index errors
     });
     return () => unsub();
-  }, []);
+  }, [profile.friends]);
 
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   
   useEffect(() => {
-    const currentVersion = '2.1.0';
+    const currentVersion = '2.2.0';
     const savedVersion = localStorage.getItem('rosyfit_update_version');
+    const lastAckTime = localStorage.getItem('rosyfit_update_ack_time');
+    const now = Date.now();
+
     if (savedVersion !== currentVersion) {
       setShowUpdateModal(true);
-      localStorage.setItem('rosyfit_update_version', currentVersion);
+    } else if (lastAckTime) {
+      const oneHour = 60 * 60 * 1000;
+      if (now - parseInt(lastAckTime) > oneHour) {
+        setShowUpdateModal(true);
+      }
     }
   }, []);
+
+  const handleUpdateAcknowledge = () => {
+    const currentVersion = '2.2.0';
+    localStorage.setItem('rosyfit_update_version', currentVersion);
+    localStorage.setItem('rosyfit_update_ack_time', Date.now().toString());
+    setShowUpdateModal(false);
+  };
 
   // ... (existing useEffects)
 
@@ -193,7 +225,7 @@ const HomeView: React.FC<HomeViewProps> = ({ profile }) => {
 
   const addGlass = async () => {
     if (waterGlasses < totalWaterGoal && auth.currentUser) {
-      const nextCount = waterGlasses + 1;
+      const nextCount = parseFloat((waterGlasses + 0.25).toFixed(2));
       setWaterGlasses(nextCount);
       const waterRef = doc(db, 'dailyStats', `${auth.currentUser.uid}_${todayStr}`);
       await setDoc(waterRef, { water: nextCount, date: todayStr }, { merge: true });
@@ -243,6 +275,47 @@ const HomeView: React.FC<HomeViewProps> = ({ profile }) => {
     }
   };
 
+  const handleAcceptRequest = async (requesterId: string, notificationId: string) => {
+    if (!auth.currentUser) return;
+    try {
+      const requesterDoc = await getDoc(doc(db, 'users', requesterId));
+      if (!requesterDoc.exists()) return;
+      const requester = { id: requesterId, ...requesterDoc.data() } as any;
+
+      // Add to my friends
+      await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+        friends: arrayUnion({ id: requester.id, name: requester.name, avatar: requester.avatar || '' }),
+        friendRequests: arrayRemove(requester.id)
+      });
+      // Add to their friends
+      await updateDoc(doc(db, 'users', requester.id), {
+        friends: arrayUnion({ id: auth.currentUser.uid, name: profile.name, avatar: profile.avatar || '' }),
+        sentRequests: arrayRemove(auth.currentUser.uid)
+      });
+      // Delete notification
+      await updateDoc(doc(db, 'notifications', notificationId), { read: true, handled: true });
+      alert(`Amicizia stretta con ${requester.name}!`);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleRejectRequest = async (requesterId: string, notificationId: string) => {
+    if (!auth.currentUser) return;
+    try {
+      await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+        friendRequests: arrayRemove(requesterId)
+      });
+      await updateDoc(doc(db, 'users', requesterId), {
+        sentRequests: arrayRemove(auth.currentUser.uid)
+      });
+      // Delete notification
+      await updateDoc(doc(db, 'notifications', notificationId), { read: true, handled: true });
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const markNotificationsAsRead = async () => {
     if (!auth.currentUser) return;
     const unread = notifications.filter(n => !n.read);
@@ -251,7 +324,12 @@ const HomeView: React.FC<HomeViewProps> = ({ profile }) => {
     }
   };
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [showGame, setShowGame] = useState(false);
+
+  useEffect(() => {
+    setUnreadCount(notifications.filter(n => !n.read).length);
+  }, [notifications]);
 
   // Logica Streak
   useEffect(() => {
@@ -390,16 +468,34 @@ const HomeView: React.FC<HomeViewProps> = ({ profile }) => {
                   <div className="text-center py-10 opacity-30 italic text-sm">Nessuna notifica.</div>
                 ) : (
                   notifications.map(n => (
-                    <div key={n.id} className={`p-4 rounded-2xl border flex items-center gap-4 ${n.read ? 'bg-gray-50 dark:bg-slate-800/50 border-transparent' : 'bg-rose-50 dark:bg-rose-900/10 border-rose-100 dark:border-rose-900/30'}`}>
-                      <div className="w-10 h-10 rounded-full bg-rose-100 dark:bg-rose-900/40 flex items-center justify-center text-rose-500 text-xl">
-                        {n.type === 'like' ? '❤️' : '🔔'}
+                    <div key={n.id} className={`p-4 rounded-2xl border flex flex-col gap-2 ${n.read ? 'bg-gray-50 dark:bg-slate-800/50 border-transparent' : 'bg-rose-50 dark:bg-rose-900/10 border-rose-100 dark:border-rose-900/30'}`}>
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-full bg-rose-100 dark:bg-rose-900/40 flex items-center justify-center text-rose-500 text-xl shrink-0">
+                          {n.type === 'like' ? '❤️' : n.type === 'friend_request' ? '👋' : '🔔'}
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-sm font-bold text-slate-800 dark:text-gray-200">{n.message}</p>
+                          <p className="text-[10px] font-bold text-gray-400 uppercase mt-1">
+                            {new Date(n.timestamp as any).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        </div>
                       </div>
-                      <div className="flex-1">
-                        <p className="text-sm font-bold text-slate-800 dark:text-gray-200">{n.message}</p>
-                        <p className="text-[10px] font-bold text-gray-400 uppercase mt-1">
-                          {new Date(n.timestamp as any).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
-                        </p>
-                      </div>
+                      {n.type === 'friend_request' && !(n as any).handled && n.fromUserId && (
+                        <div className="flex gap-2 mt-2 ml-14">
+                          <button 
+                            onClick={() => handleAcceptRequest(n.fromUserId!, n.id)}
+                            className="bg-emerald-500 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-sm"
+                          >
+                            Accetta
+                          </button>
+                          <button 
+                            onClick={() => handleRejectRequest(n.fromUserId!, n.id)}
+                            className="bg-gray-200 dark:bg-slate-700 text-slate-800 dark:text-gray-200 px-4 py-2 rounded-xl text-xs font-bold shadow-sm"
+                          >
+                            Rifiuta
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))
                 )}
@@ -433,12 +529,30 @@ const HomeView: React.FC<HomeViewProps> = ({ profile }) => {
         </div>
       )}
 
+      <div className="bg-gradient-to-br from-pink-500 to-rose-600 p-6 rounded-[2.5rem] shadow-xl text-white relative overflow-hidden">
+        <div className="absolute -right-4 -top-4 w-24 h-24 bg-white/10 rounded-full blur-2xl" />
+        <div className="flex justify-between items-center relative z-10">
+          <div>
+            <h3 className="text-lg font-black tracking-tight">Healthy Crush 🥗</h3>
+            <p className="text-pink-100 text-[10px] font-bold uppercase tracking-widest opacity-80">Sfida il fritto e resta in forma!</p>
+          </div>
+          <button 
+            onClick={() => setShowGame(true)}
+            className="bg-white text-rose-600 px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg active:scale-95 transition-all"
+          >
+            Gioca Ora
+          </button>
+        </div>
+      </div>
+
+      <Leaderboard />
+
       <div className="bg-gradient-to-br from-blue-500 to-blue-700 p-6 rounded-[2.5rem] shadow-xl text-white relative overflow-hidden">
         <div className="absolute -right-4 -top-4 w-24 h-24 bg-white/10 rounded-full blur-2xl" />
         <div className="flex justify-between items-center mb-6 relative z-10">
           <div>
             <h3 className="text-lg font-black tracking-tight">Idratazione</h3>
-            <p className="text-blue-100 text-[10px] font-bold uppercase tracking-widest opacity-80">Target: {totalWaterGoal * 250}ml</p>
+            <p className="text-blue-100 text-[10px] font-bold uppercase tracking-widest opacity-80">Target: {totalWaterGoal}L</p>
           </div>
           <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center text-2xl">
             💧
@@ -446,13 +560,13 @@ const HomeView: React.FC<HomeViewProps> = ({ profile }) => {
         </div>
         <div className="space-y-4 relative z-10">
           <div className="flex gap-1">
-            {[...Array(totalWaterGoal)].map((_, i) => (
+            {[...Array(Math.ceil(totalWaterGoal / 0.25))].map((_, i) => (
               <motion.div 
                 key={i} 
                 initial={false}
                 animate={{ 
-                  backgroundColor: i < waterGlasses ? '#ffffff' : 'rgba(255, 255, 255, 0.2)',
-                  scale: i === waterGlasses - 1 ? [1, 1.2, 1] : 1
+                  backgroundColor: i < (waterGlasses / 0.25) ? '#ffffff' : 'rgba(255, 255, 255, 0.2)',
+                  scale: i === Math.floor(waterGlasses / 0.25) - 1 ? [1, 1.2, 1] : 1
                 }}
                 transition={{ duration: 0.3 }}
                 className="h-2.5 flex-1 rounded-full shadow-inner" 
@@ -468,8 +582,8 @@ const HomeView: React.FC<HomeViewProps> = ({ profile }) => {
                 exit={{ x: 10, opacity: 0 }}
                 className="flex items-baseline gap-1"
               >
-                <span className="text-2xl font-black">{waterGlasses * 250}</span>
-                <span className="text-xs font-bold opacity-70">ml</span>
+                <span className="text-2xl font-black">{waterGlasses}</span>
+                <span className="text-xs font-bold opacity-70">L</span>
               </motion.div>
             </AnimatePresence>
             <motion.button 
@@ -511,6 +625,15 @@ const HomeView: React.FC<HomeViewProps> = ({ profile }) => {
         </div>
       </div>
 
+      <AnimatePresence>
+        {showGame && (
+          <HealthyCrush 
+            userName={profile.name} 
+            onClose={() => setShowGame(false)} 
+          />
+        )}
+      </AnimatePresence>
+
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-bold">Diario Alimentare</h2>
         <input 
@@ -548,8 +671,8 @@ const HomeView: React.FC<HomeViewProps> = ({ profile }) => {
                           post.userName?.[0]
                         )}
                       </div>
-                      <div className="flex-1">
-                        <span className="font-bold block text-xs">{post.userName}</span>
+                      <div className="flex-1 cursor-pointer" onClick={() => onViewFriend(post.userId)}>
+                        <span className="font-bold block text-xs hover:text-rose-500 transition-colors">{post.userName}</span>
                         <span className="text-[9px] text-gray-400 uppercase font-bold">
                           {post.timestamp.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
                         </span>
@@ -582,6 +705,15 @@ const HomeView: React.FC<HomeViewProps> = ({ profile }) => {
       </div>
 
       <AnimatePresence>
+        {showGame && (
+          <HealthyCrush 
+            userName={profile.name} 
+            onClose={() => setShowGame(false)} 
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
         {showUpdateModal && (
           <motion.div 
             initial={{ opacity: 0 }}
@@ -603,8 +735,8 @@ const HomeView: React.FC<HomeViewProps> = ({ profile }) => {
                 <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center text-3xl mx-auto mb-4 shadow-inner">
                   🚀
                 </div>
-                <h2 className="text-2xl font-black tracking-tighter uppercase text-slate-800 dark:text-white">Novità RosyFit 2.1</h2>
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">Aggiornamento disponibile</p>
+                <h2 className="text-2xl font-black tracking-tighter uppercase text-slate-800 dark:text-white">Novità RosyFit 2.2</h2>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">Nuovo Aggiornamento</p>
               </div>
 
               <div className="space-y-6 mb-8">
@@ -625,16 +757,16 @@ const HomeView: React.FC<HomeViewProps> = ({ profile }) => {
                 </div>
 
                 <div className="flex gap-4 items-start">
-                  <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center text-lg flex-shrink-0">🥨</div>
+                  <div className="w-8 h-8 rounded-xl bg-pink-100 text-pink-600 flex items-center justify-center text-lg flex-shrink-0">🥗</div>
                   <div>
-                    <h3 className="font-bold text-sm text-slate-800 dark:text-white">Spuntino Opzionale</h3>
-                    <p className="text-xs text-gray-500 mt-1">Il secondo spuntino ora è facoltativo. Puoi saltarlo senza interrompere la tua streak!</p>
+                    <h3 className="font-bold text-sm text-slate-800 dark:text-white">Healthy Crush Mini-Game</h3>
+                    <p className="text-xs text-gray-500 mt-1">Sfida te stesso nel nuovo gioco match-3! Evita il fritto e scala la classifica globale.</p>
                   </div>
                 </div>
               </div>
 
               <button 
-                onClick={() => setShowUpdateModal(false)}
+                onClick={handleUpdateAcknowledge}
                 className="w-full py-4 bg-rose-500 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl shadow-rose-200 dark:shadow-none hover:bg-rose-600 transition-all active:scale-95"
               >
                 Fantastico! Iniziamo

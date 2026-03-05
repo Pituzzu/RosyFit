@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { GymSettings, UserProfile } from '../types';
 import { auth, db } from '../services/firebase';
-import { collection, addDoc, query, orderBy, onSnapshot, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, query, orderBy, onSnapshot, Timestamp, limit, where } from 'firebase/firestore';
 import { compressImage } from '../services/utils';
 
 interface Meal {
@@ -34,6 +34,7 @@ const MealsView: React.FC<MealsViewProps> = ({ gymSettings, profile }) => {
   const [viewMode, setViewMode] = useState<'personal' | 'friends'>('personal');
   const [meals, setMeals] = useState<Meal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [indexError, setIndexError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<string>('Tutti');
   const [dateFilter, setDateFilter] = useState<string>('Sempre');
@@ -47,17 +48,63 @@ const MealsView: React.FC<MealsViewProps> = ({ gymSettings, profile }) => {
   const uploadCategories = ['Colazione', 'Spuntino', 'Pranzo', 'Cena', 'Pasto Fit', 'Cheat Meal', 'Altro'];
   const dateOptions = ['Sempre', 'Oggi', 'Ultimi 7 giorni'];
 
-  // ... (useEffect remains same)
+  useEffect(() => {
+    if (!auth.currentUser) return;
+    setIsLoading(true);
+    
+    let q;
+    const myUid = auth.currentUser.uid;
+    const friendIds = (profile.friends || []).map(f => f.id);
+
+    if (viewMode === 'personal') {
+      q = query(
+        collection(db, 'meals'), 
+        where('userId', '==', myUid),
+        orderBy('timestamp', 'desc'), 
+        limit(20)
+      );
+    } else {
+      // If no friends, don't even query
+      if (friendIds.length === 0) {
+        setMeals([]);
+        setIsLoading(false);
+        return;
+      }
+      
+      // Firestore 'in' supports up to 30 elements
+      const limitedFriendIds = friendIds.slice(0, 30);
+      q = query(
+        collection(db, 'meals'), 
+        where('userId', 'in', limitedFriendIds),
+        orderBy('timestamp', 'desc'), 
+        limit(30)
+      );
+    }
+
+    const unsub = onSnapshot(q, (snap: any) => {
+      const mealsData = snap.docs.map((doc: any) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          timestamp: data.timestamp ? (data.timestamp as Timestamp).toDate() : new Date()
+        } as Meal;
+      });
+      setMeals(mealsData);
+      setIsLoading(false);
+      setIndexError(null);
+    }, (error: any) => {
+      console.error("Errore nel caricamento dei pasti:", error);
+      if (error.code === 'failed-precondition' || error.message?.includes('index')) {
+        setIndexError("Firestore richiede un indice per questa ricerca. Clicca il link nella console o contatta l'amministratore.");
+      }
+      setIsLoading(false);
+    });
+    return () => unsub();
+  }, [viewMode, profile.friends]);
 
   const filteredMeals = useMemo(() => {
     let result = meals;
-
-    // Filter by view mode
-    if (viewMode === 'personal') {
-      result = result.filter(m => m.userId === auth.currentUser?.uid);
-    } else {
-      result = result.filter(m => m.userId !== auth.currentUser?.uid);
-    }
 
     // Filter by category
     if (categoryFilter !== 'Tutti') {
@@ -167,6 +214,19 @@ const MealsView: React.FC<MealsViewProps> = ({ gymSettings, profile }) => {
   return (
     <div className="p-4 space-y-6 pb-20">
       <h1 className="text-3xl font-black tracking-tighter">Diario Foto</h1>
+
+      {indexError && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 p-6 rounded-[2.5rem] border border-amber-100 dark:border-amber-900/30">
+          <p className="text-amber-800 dark:text-amber-400 text-xs font-bold uppercase tracking-widest mb-2">⚠️ Configurazione Richiesta</p>
+          <p className="text-amber-700 dark:text-amber-500 text-[10px] leading-relaxed">
+            Per visualizzare i pasti ottimizzati, è necessario creare un indice in Firebase. 
+            Copia questo link e incollalo nel browser:
+          </p>
+          <div className="mt-3 p-3 bg-white dark:bg-slate-900 rounded-xl text-[8px] break-all font-mono text-gray-500 border border-amber-100 dark:border-amber-900/30">
+            https://console.firebase.google.com/v1/r/project/palestralocampo/firestore/indexes?create_composite=Ck1wcm9qZWN0cy9wYWxlc3RyYWxvY2FtcG8vZGF0YWJhc2VzLyhkZWZhdWx0KS9jb2xsZWN0aW9uR3JvdXBzL21lYWxzL2luZGV4ZXMvXxABGgoKBnVzZXJJZBABGg0KCXRpbWVzdGFtcBACGgwKCF9fbmFtZV9fEAI
+          </div>
+        </div>
+      )}
 
       <div className="flex gap-2 p-1 bg-gray-100 dark:bg-slate-800 rounded-2xl">
         <button 

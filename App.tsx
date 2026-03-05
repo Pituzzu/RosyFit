@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { View, UserProfile, GymSettings } from './types';
 import { auth, db } from './services/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { sanitizeForFirestore } from './services/utils';
 import LoginView from './views/Login';
 import HomeView from './views/Home';
@@ -12,6 +12,7 @@ import GoalsView from './views/Goals';
 import MealsView from './views/Meals';
 import SettingsView from './views/Settings';
 import ProfileView from './views/Profile';
+import FriendProfileView from './views/FriendProfile';
 import ShoppingListView from './views/ShoppingList';
 import DailyCheckIn from './components/DailyCheckIn';
 import BottomBar from './components/BottomBar';
@@ -47,24 +48,39 @@ const App: React.FC = () => {
         
         // Sincronizzazione Profilo da Firestore
         const userDocRef = doc(db, 'users', user.uid);
-        const docSnap = await getDoc(userDocRef);
         
-        if (docSnap.exists()) {
-          setProfile(docSnap.data() as UserProfile);
-        } else {
-          // Crea profilo iniziale se nuovo utente
-          const initialProfile: UserProfile = {
-            name: user.displayName || 'Atleta',
-            surname: '',
-            birthDate: '',
-            friends: [],
-            weight: 0,
-            height: 0,
-            bmi: 0,
-          };
-          await setDoc(userDocRef, initialProfile);
-          setProfile(initialProfile);
-        }
+        onSnapshot(userDocRef, async (snap) => {
+          if (snap.exists()) {
+            const data = snap.data() as UserProfile;
+            // Generate invite code if missing
+            if (!data.inviteCode) {
+              const newCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+              await updateDoc(userDocRef, { inviteCode: newCode });
+              data.inviteCode = newCode;
+            }
+            setProfile(data);
+          } else {
+            // Crea profilo iniziale se nuovo utente
+            const initialProfile: UserProfile = {
+              name: user.displayName || 'Atleta',
+              surname: '',
+              birthDate: '',
+              friends: [],
+              friendRequests: [],
+              sentRequests: [],
+              inviteCode: Math.random().toString(36).substring(2, 8).toUpperCase(),
+              weight: 0,
+              height: 0,
+              bmi: 0,
+              isDietPublic: false,
+              waterGoal: 2.5,
+              dailyCalories: 2000,
+              targetWeight: 60
+            };
+            await setDoc(userDocRef, initialProfile);
+            setProfile(initialProfile);
+          }
+        });
 
         // Sincronizzazione Impostazioni
         const settingsRef = doc(db, 'settings', user.uid);
@@ -120,7 +136,18 @@ const App: React.FC = () => {
       )}
 
       <main className="flex-1 pb-20 overflow-y-auto">
-        {activeTab === View.HOME && <HomeView profile={profile} />}
+        {activeTab === View.HOME && (
+          <HomeView 
+            profile={profile} 
+            onViewFriend={async (friendId) => {
+              const friendDoc = await getDoc(doc(db, 'users', friendId));
+              if (friendDoc.exists()) {
+                setSelectedFriendProfile({ id: friendDoc.id, ...friendDoc.data() } as any);
+                setActiveTab(View.FRIEND_PROFILE);
+              }
+            }}
+          />
+        )}
         {activeTab === View.DIET && (
           <DietView 
             gymSettings={gymSettings} 
@@ -155,23 +182,22 @@ const App: React.FC = () => {
             setProfile={async (p) => {
               setProfile(p);
               if (auth.currentUser) {
-                await setDoc(doc(db, 'users', auth.currentUser.uid), sanitizeForFirestore(p));
+                await setDoc(doc(db, 'users', auth.currentUser.uid), sanitizeForFirestore(p), { merge: true });
               }
             }}
             onViewFriend={async (friendId) => {
               const friendDoc = await getDoc(doc(db, 'users', friendId));
               if (friendDoc.exists()) {
-                setSelectedFriendProfile(friendDoc.data() as UserProfile);
+                setSelectedFriendProfile({ id: friendDoc.id, ...friendDoc.data() } as any);
                 setActiveTab(View.FRIEND_PROFILE);
               }
             }}
           />
         )}
         {activeTab === View.FRIEND_PROFILE && selectedFriendProfile && (
-          <DietView 
-            gymSettings={gymSettings}
-            profile={selectedFriendProfile}
-            readOnly={true}
+          <FriendProfileView 
+            friendId={(selectedFriendProfile as any).id}
+            myProfile={profile}
             onBack={() => setActiveTab(View.PROFILE)}
           />
         )}

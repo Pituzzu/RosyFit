@@ -1,0 +1,50 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Stores user information, diet settings, and progress.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "weight": { "type": "number" },
+        "height": { "type": "number" },
+        "age": { "type": "integer" },
+        "gender": { "type": "string" },
+        "activityLevel": { "type": "string" },
+        "dietGoal": { "type": "string" },
+        "bmi": { "type": "number" },
+        "dailyCalories": { "type": "number" },
+        "dietStartDate": { "type": "string" },
+        "selectedWeekId": { "type": "string" },
+        "weeklyDiets": { "type": "object" },
+        "weeklyTargets": { "type": "array" },
+        "lastTargetUpdateWeek": { "type": "string" }
+      },
+      "required": ["uid", "name", "email"]
+    },
+    "GameScore": {
+      "title": "Game Score",
+      "description": "High scores for the Healthy Crush mini-game.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "score": { "type": "number" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "userName", "score", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile data."
+    },
+    "/gameScores/{scoreId}": {
+      "schema": "GameScore",
+      "description": "Global leaderboard for the mini-game."
+    }
+  }
+}
